@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import io
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from openpyxl.styles import Alignment, Font, PatternFill, Border, SidE
 from openpyxl.utils import get_column_letter
 import plotly.express as px
 import re
