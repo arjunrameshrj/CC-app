@@ -1,646 +1,810 @@
 import streamlit as st
 import pandas as pd
-import os
-import io
-from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
 import plotly.express as px
-import re
+import os
+import hashlib
 
-# --- Configuration ---
-st.set_page_config(page_title="KPI Dashboard", layout="wide")
+# Streamlit page configuration
+st.set_page_config(page_title="Warranty Conversion Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-# --- CSS Styling ---
-def load_css():
-    st.markdown("""
+# Custom CSS for professional styling
+st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap');
 
-    html, body, [data-testid="stAppViewContainer"] {
-        background: linear-gradient(-45deg, #1f4037, #99f2c8, #2c3e50, #3498db);
-        background-size: 400% 400%;
-        animation: gradient 20s ease infinite;
-        color: #ffffff;
-        font-family: 'Inter', sans-serif;
-    }
-    @keyframes gradient {
-        0% {background-position: 0% 50%;}
-        50% {background-position: 100% 50%;}
-        100% {background-position: 0% 50%;}
-    }
-
-    .main-container {
-        background: rgba(255, 255, 255, 0.12);
-        backdrop-filter: blur(10px);
-        border-radius: 20px;
-        padding: 25px;
-        margin-bottom: 30px;
-    }
-
-    h1, h2, h3, h4, h5, h6 {
-        color: white !important;
-        text-shadow: 1px 1px 3px rgba(0,0,0,0.4);
-    }
-
-    .stDataFrame {
-        border-radius: 15px !important;
-        overflow: hidden !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-        background: rgba(255, 255, 255, 0.1) !important;
-        backdrop-filter: blur(8px) !important;
-    }
-
-    div.stButton > button, div.stDownloadButton > button {
-        background: linear-gradient(135deg, #f7971e, #ffd200) !important;
-        color: black !important;
-        padding: 12px 25px !important;
-        border-radius: 50px !important;
-        font-weight: 600 !important;
-        cursor: pointer !important;
-        transition: all 0.3s ease !important;
-        border: none !important;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2) !important;
-    }
-
-    .kpi-card {
-        background: rgba(255, 255, 255, 0.15) !important;
-        border-radius: 15px !important;
-        padding: 20px !important;
-        margin-bottom: 15px !important;
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2) !important;
-        transition: all 0.3s ease !important;
-        border-left: 6px solid;
-        position: relative;
-        overflow: hidden;
-        backdrop-filter: blur(8px);
-    }
-
-    .kpi-exceeds {
-        border-left-color: #00E676 !important;
-        background: linear-gradient(135deg, rgba(0, 230, 118, 0.15), rgba(0, 200, 83, 0.2)) !important;
-    }
-    .kpi-below {
-        border-left-color: #FF5252 !important;
-        background: linear-gradient(135deg, rgba(255, 82, 82, 0.15), rgba(255, 41, 41, 0.2)) !important;
-    }
-    .kpi-neutral {
-        border-left-color: #FFD600 !important;
-        background: linear-gradient(135deg, rgba(255, 214, 0, 0.15), rgba(255, 171, 0, 0.2)) !important;
-    }
+        body {
+            font-family: 'Poppins', 'Inter', sans-serif;
+        }
+        .stApp {
+            background: linear-gradient(135deg, #dbeafe 0%, #f9fafb 100%);
+            padding: 20px;
+        }
+        .main-header {
+            color: #3730a3;
+            font-size: 2.8em;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .subheader {
+            color: #3730a3;
+            font-size: 1.6em;
+            font-weight: 600;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        .stButton>button {
+            background: linear-gradient(90deg, #3730a3, #4338ca);
+            color: white;
+            border-radius: 10px;
+            padding: 12px 24px;
+            font-weight: 500;
+            border: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .stButton>button:hover {
+            background: linear-gradient(90deg, #06b6d4, #22d3ee);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            transform: translateY(-1px);
+        }
+        .stTextInput>div>input {
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            padding: 12px;
+            background-color: #ffffff;
+            transition: border-color 0.3s ease;
+        }
+        .stTextInput>div>input:focus {
+            border-color: #06b6d4;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+        }
+        .stSelectbox>div>div>select {
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            padding: 12px;
+            background-color: #ffffff;
+            color: #1f2937;
+            transition: border-color 0.3s ease;
+        }
+        .stSelectbox>div>div>select:focus {
+            border-color: #06b6d4;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+        }
+        .stCheckbox label {
+            color: #1f2937;
+            font-weight: 500;
+        }
+        .sidebar .sidebar-content {
+            background: #ffffff;
+            border-right: 2px solid transparent;
+            border-image: linear-gradient(to bottom, #3730a3, #06b6d4) 1;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        .sidebar .stForm {
+            background-color: #f3f4f6;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+        .stDataFrame {
+            border-radius: 12px;
+            overflow: hidden;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 10px;
+            text-align: center;
+        }
+        .stDataFrame table {
+            margin-left: auto;
+            margin-right: auto;
+            width: 100%;
+        }
+        .stDataFrame th {
+            background-color: #3730a3 !important;
+            color: white !important;
+            font-weight: 600 !important;
+            text-align: center !important;
+        }
+        .stDataFrame td {
+            text-align: center !important;
+        }
+        .low-value-conversion {
+            background-color: #fee2e2 !important;
+        }
+        .stPlotlyChart {
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            background-color: #ffffff;
+            padding: 10px;
+        }
+        .stSuccess, .stWarning, .stInfo, .stError {
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+        .stExpander {
+            border-radius: 10px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 15px;
+        }
+        .stExpander>summary {
+            background: linear-gradient(to right, #f3f4f6, #ffffff);
+            padding: 12px;
+            font-weight: 500;
+            color: #3730a3;
+        }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# --- Helper Functions ---
-def extract_numeric(text):
-    """Extracts numeric value from string, handling percentages and time formats."""
-    if pd.isna(text):
-        return 0.0
-    if isinstance(text, (int, float)):
-        return float(text)
-    
-    s = str(text).replace(',', '').strip()
+# Create data directory if it doesn't exist
+DATA_DIR = "data"
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
-    # Handle time formats (e.g., "2 minutes 30 seconds")
-    if "minute" in s or "second" in s:
-        minutes_match = re.search(r'(\d+)\s*minute', s)
-        seconds_match = re.search(r'(\d+)\s*second', s)
-        total_seconds = 0
-        if minutes_match:
-            total_seconds += int(minutes_match.group(1)) * 60
-        if seconds_match:
-            total_seconds += int(seconds_match.group(1))
-        return float(total_seconds)    
-    
-    # Handle percentages
-    percent_match = re.search(r'(\d+\.?\d*)\%', s)
-    if percent_match:
-        return float(percent_match.group(1))
-    
-    # Handle other numeric formats
-    num_match = re.search(r'([-+]?\d+\.?\d*)', s)
-    if num_match:
-        return float(num_match.group(1))
-    
-    return 0.0
+JUNE_FILE_PATH = os.path.join(DATA_DIR, "june_data.csv")
+USER_CREDENTIALS_FILE = os.path.join(DATA_DIR, "user_credentials.txt")
 
-def validate_input(text, column_type):
-    """Validates input for Target, Actuals, and Variance columns."""
-    if pd.isna(text) or text == "":
-        return False, "Value cannot be empty."
-    
-    text = str(text).strip()
-    
-    if column_type in ["Target", "Actuals"]:
-        # Allow time formats (e.g., "2 minutes 30 seconds") or percentages (e.g., "80%")
-        if "minute" in text or "second" in text:
-            time_match = re.search(r'(\d+\s*minute[s]?)?\s*(\d+\s*second[s]?)?', text)
-            if time_match:
-                return True, ""
-            return False, "Invalid time format. Use 'X minutes Y seconds'."
-        if "%" in text:
-            percent_match = re.search(r'(\d+\.?\d*)\%', text)
-            if percent_match:
-                return True, ""
-            return False, "Invalid percentage format. Use 'XX%'."
-        num_match = re.search(r'[-+]?\d+\.?\d*', text)
-        if num_match:
-            return True, ""
-        return False, "Invalid numeric format."
-    
-    if column_type == "Variance":
-        # Allow formats like "+5%", "-30 seconds", or numeric values
-        if "%" in text or "second" in text or "minute" in text:
-            return True, ""
-        num_match = re.search(r'[-+]?\d+\.?\d*', text)
-        if num_match:
-            return True, ""
-        return False, "Invalid variance format. Use 'X%', 'X seconds', or numeric value."
-    
-    return True, ""
+# Function to hash passwords
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-def get_kpi_type(kpi_name):
-    """Determines if KPI is 'lower_is_better' or 'higher_is_better'."""
-    lower_is_better_kpis = [
-        "Average Handle Time (AHT)", "Call Abandonment Rate", "High Risk Escalation Rate"
-    ]
-    for kpi_part in lower_is_better_kpis:
-        if kpi_part in kpi_name:
-            return 'lower_is_better'
-    return 'higher_is_better'
+# Initialize user credentials (admin user for file upload access)
+def initialize_credentials():
+    if not os.path.exists(USER_CREDENTIALS_FILE):
+        with open(USER_CREDENTIALS_FILE, 'w') as f:
+            f.write(f"admin:{hash_password('admin123')}\n")
 
-def get_performance_status(actual, target, kpi_type):
-    """Compares actual to target and returns performance status."""
-    if pd.isna(actual) or pd.isna(target):
-        return 'neutral'
-        
-    if kpi_type == 'lower_is_better':
-        return 'exceeds' if actual <= target else 'below'
+initialize_credentials()
+
+# Load credentials
+def load_credentials():
+    credentials = {}
+    if os.path.exists(USER_CREDENTIALS_FILE):
+        with open(USER_CREDENTIALS_FILE, 'r') as f:
+            for line in f:
+                username, hashed_pwd = line.strip().split(':')
+                credentials[username] = hashed_pwd
+    return credentials
+
+# Authentication function
+def authenticate(username, password):
+    credentials = load_credentials()
+    return username in credentials and credentials[username] == hash_password(password)
+
+# Function to map item categories to replacement warranty categories
+def map_to_replacement_category(item_category):
+    fan_categories = ['CEILING FAN', 'PEDESTAL FAN', 'RECHARGABLE FAN', 'TABLE FAN', 'TOWER FAN', 'WALL FAN']
+    steamer_categories = ['GARMENTS STEAMER', 'STEAMER']
+    
+    if any(fan in item_category.upper() for fan in fan_categories):
+        return 'FAN'
+    elif 'MIXER GRINDER' in item_category.upper():
+        return 'MIXER GRINDER'
+    elif 'IRON BOX' in item_category.upper():
+        return 'IRON BOX'
+    elif 'ELECTRIC KETTLE' in item_category.upper():
+        return 'ELECTRIC KETTLE'
+    elif 'OTG' in item_category.upper():
+        return 'OTG'
+    elif any(steamer in item_category.upper() for steamer in steamer_categories):
+        return 'STEAMER'
+    elif 'INDUCTION' in item_category.upper():
+        return 'INDUCTION COOKER'
     else:
-        return 'exceeds' if actual >= target else 'below'
+        return item_category
 
-def create_status_badge(status):
-    """Creates plain text status for dataframe display."""
-    return 'Exceeds' if status == 'exceeds' else 'Below' if status == 'below' else 'Neutral'
+# Session state initialization
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'show_upload_form' not in st.session_state:
+    st.session_state.show_upload_form = False
+if 'user_role' not in st.session_state:
+    st.session_state.user_role = "non-admin"
 
-def initialize_data():
-    """Initialize or load KPI data with default values for new rows."""
-    default_data = {
-        "KPI": [
-            "Average Handle Time (AHT)",
-            "First Call Resolution (FCR) (48hrs)",
-            "Customer Satisfaction Score (CSAT)",
-            "Service Level (SL)",
-            "Call Abandonment Rate",
-            "Call Quality Score",
-            "Training Completion Rate",
-            "Attendance Rate",
-            "Compliance Score",
-            "High Risk Escalation Rate"
-        ],
-        "Target": ["2 minutes", "80%", "90%", "90% (20 secs)", "<7%", "90%", "100%", "95%", "95%", "<5%"],
-        "Actuals": ["1 minute 30 seconds", "78%", "88%", "85% (20 secs)", "3%", "80%", "90%", "93%", "92%", "6%"],
-        "Variance": ["-30 seconds", "-2%", "-2%", "-5%", "-4%", "-10%", "-10%", "-2%", "-3%", "+1%"],
-        "Comments": [
-            "Good performance; reduced handle time effectively.",
-            "Slightly below target; review training needs.",
-            "Consistent but needs improvement in certain areas.",
-            "Below target; improve answer speed.",
-            "Positive outcome; effective wait management.",
-            "Needs attention; consider team-building activities.",
-            "Schedule follow-up sessions for new hires.",
-            "Monitor patterns; address any absenteeism issues.",
-            "Review compliance training; address knowledge gaps.",
-            "Slightly above target; investigate root cause."
-        ],
-        "Explanation of KPIs": [
-            "Measures average call duration. Lower is better if quality is maintained.",
-            "Calls resolved on first contact. Higher % is better.",
-            "Customer feedback rating. Higher % indicates satisfaction.",
-            "Calls answered within 20 secs. Higher % is better.",
-            "Lower % means fewer abandoned calls.",
-            "Quality of agent performance. Higher is better.",
-            "Completion of mandatory training. Should be 100%.",
-            "Employee attendance reliability. Higher % is better.",
-            "Regulatory adherence. Higher % avoids penalties.",
-            "Escalation to management. Lower % is ideal."
-        ]
-    }
-    
-    DATA_FILE = "kpi_data.csv"
-    if os.path.exists(DATA_FILE):
-        return pd.read_csv(DATA_FILE)
-    return pd.DataFrame(default_data)
+# Main dashboard
+st.markdown('<h1 class="main-header">📊 Warranty Conversion Analysis Dashboard - June</h1>', unsafe_allow_html=True)
 
-def to_excel(df_to_export):
-    """Convert DataFrame to styled Excel file."""
-    output = io.BytesIO()
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "KPI Dashboard"
-    
-    # Add title
-    sheet.merge_cells('A1:F1')
-    title_cell = sheet['A1']
-    title_cell.value = "KPI Performance Dashboard"
-    title_cell.font = Font(size=16, bold=True, color="FFFFFF")
-    title_cell.fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
-    title_cell.alignment = Alignment(horizontal='center', vertical='center')
-    
-    # Add headers
-    headers = list(df_to_export.columns)
-    sheet.append(headers)
-    
-    # Style headers
-    for col_idx in range(1, len(headers) + 1):
-        header_cell = sheet.cell(row=2, column=col_idx)
-        header_cell.font = Font(bold=True, color="FFFFFF")
-        header_cell.fill = PatternFill(start_color="7030A0", end_color="7030A0", fill_type="solid")
-        header_cell.alignment = Alignment(horizontal='center')
-    
-    # Add data and style variance column
-    variance_col_idx = headers.index("Variance") + 1 if "Variance" in headers else -1
-    kpi_col_idx = headers.index("KPI") + 1 if "KPI" in headers else -1
-    
-    for r_idx, row_data in enumerate(df_to_export.itertuples(index=False), start=3):
-        sheet.append(row_data)
-        
-        for col_idx in range(1, sheet.max_column + 1):
-            cell = sheet.cell(row=r_idx, column=col_idx)
-            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            
-            if col_idx == variance_col_idx and variance_col_idx != -1:
-                kpi_name = sheet.cell(row=r_idx, column=kpi_col_idx).value
-                variance_str = str(cell.value)
-                variance_num = extract_numeric(variance_str)
-                kpi_type = get_kpi_type(kpi_name)
+# Load data function
+required_columns = ['Item Category', 'BDM', 'RBM', 'Store', 'Staff Name', 'TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
 
-                if kpi_type == 'lower_is_better':
-                    cell.font = Font(color="00E676" if variance_num < 0 else "FF5252" if variance_num > 0 else "FFD600", bold=True)
-                else:
-                    cell.font = Font(color="00E676" if variance_num > 0 else "FF5252" if variance_num < 0 else "FFD600", bold=True)
-
-    # Adjust column widths
-    for col_idx in range(1, sheet.max_column + 1):
-        max_length = 0
-        column_letter = get_column_letter(col_idx)
-        for cell in sheet[column_letter]:
-            try:
-                if cell.value is not None and len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        adjusted_width = (max_length + 2) * 1.2
-        sheet.column_dimensions[column_letter].width = adjusted_width
-    
-    # Add borders
-    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), 
-                             top=Side(style='thin'), bottom=Side(style='thin'))
-    for row in sheet.iter_rows(min_row=1, max_row=sheet.max_row, max_col=sheet.max_column):
-        for cell in row:
-            cell.border = thin_border
-    
-    workbook.save(output)
-    return output.getvalue()
-
-# --- Updated Editor Function ---
-def display_editor(df):
-    """Display the KPI editor view with table editing, row addition, and deletion functionality."""
-    st.subheader("📝 Edit KPI Metrics")
-    
-    # Instructions for users
-    st.markdown("""
-    **Instructions:**
-    - **Edit**: Click on any cell to edit its value.
-    - **Add Row**: Click the ➕ button at the bottom of the table to add a new KPI.
-    - **Delete Row**: Select rows using the checkbox in the '🗑️ Select to Delete' column and click the '🗑️ Delete Selected Rows' button.
-    - **Validate**: Ensure 'Target', 'Actuals', and 'Variance' are in valid formats (e.g., '80%', '2 minutes 30 seconds', or numeric values).
-    - **Save**: Click 'Save Changes' to save your edits to the CSV file.
-    - **Download**: Export the table as an Excel file using 'Download Excel'.
-    """, unsafe_allow_html=True)
-    
-    # Initialize session state for edited dataframe
-    if 'edited_df' not in st.session_state:
-        st.session_state.edited_df = df.copy()
-    
-    # Add a temporary column for selection before displaying in data_editor
-    df_for_editor = st.session_state.edited_df.copy()
-    df_for_editor.insert(0, 'Select', False) # Add a boolean column for selection at the beginning
-
-    # Column configuration with validation
-    column_config = {
-        "Select": st.column_config.CheckboxColumn(
-            "🗑️ Select to Delete",
-            help="Select rows to delete",
-            default=False,
-            width="small"
-        ),
-        "KPI": st.column_config.TextColumn(
-            "KPI Name",
-            help="Enter the name of the KPI (e.g., 'Customer Satisfaction Score (CSAT)')",
-            required=True
-        ),
-        "Target": st.column_config.TextColumn(
-            "Target Value",
-            help="Enter target value (e.g., '80%', '2 minutes', or numeric)",
-            required=True
-        ),
-        "Actuals": st.column_config.TextColumn(
-            "Current Value",
-            help="Enter actual value (e.g., '78%', '1 minute 30 seconds', or numeric)",
-            required=True
-        ),
-        "Variance": st.column_config.TextColumn(
-            "Variance",
-            help="Enter variance (e.g., '-2%', '-30 seconds', or numeric)",
-            required=True
-        ),
-        "Comments": st.column_config.TextColumn(
-            "Comments",
-            help="Additional notes about this KPI",
-            default=""
-        ),
-        "Explanation of KPIs": st.column_config.TextColumn(
-            "KPI Explanation",
-            help="Description of what this KPI measures",
-            default=""
-        )
-    }
-    
-    # Display editable dataframe with row selection and dynamic rows
-    edited_df_result = st.data_editor(
-        df_for_editor, # Pass the DataFrame with the 'Select' column
-        num_rows="dynamic",
-        use_container_width=True,
-        column_config=column_config,
-        key="kpi_data_editor",
-        hide_index=True,
-        disabled=False
-    )
-    
-    # Update the session state with the result from data_editor, removing the 'Select' column
-    st.session_state.edited_df = edited_df_result.drop(columns=['Select'], errors='ignore')
-
-    # Validate edited data (excluding the 'Select' column for validation)
-    validation_errors = []
-    for idx, row in edited_df_result.drop(columns=['Select'], errors='ignore').iterrows():
-        for col in ["Target", "Actuals", "Variance"]:
-            is_valid, error_msg = validate_input(row[col], col)
-            if not is_valid:
-                validation_errors.append(f"Row {idx + 1}, {col}: {error_msg}")
-    
-    if validation_errors:
-        st.error("🚨 Validation Errors:\n" + "\n".join(validation_errors))
-    
-    # Action buttons
-    col1, col2, col3 = st.columns([1, 1, 1]) # Added a column for the delete button
-    
-    with col1:
-        if st.button("💾 Save Changes"):
-            if not validation_errors:
-                # Save the DataFrame without the 'Select' column
-                st.session_state.current_df = st.session_state.edited_df
-                st.session_state.current_df.to_csv("kpi_data.csv", index=False)
-                st.success("✅ Changes saved successfully!")
-                st.rerun()  # Updated to st.rerun() for Streamlit >= 1.10
-            else:
-                st.error("🚨 Please fix validation errors before saving.")
-    
-    with col2:
-        if st.button("🗑️ Delete Selected Rows"):
-            # Filter out selected rows
-            rows_to_keep = edited_df_result[edited_df_result['Select'] == False].drop(columns=['Select'])
-            if len(rows_to_keep) < len(edited_df_result.drop(columns=['Select'])):
-                st.session_state.current_df = rows_to_keep
-                st.session_state.edited_df = rows_to_keep.copy() # Update edited_df as well
-                st.session_state.current_df.to_csv("kpi_data.csv", index=False)
-                st.success("🗑️ Selected rows deleted successfully!")
-                st.rerun()
-            else:
-                st.warning("No rows selected for deletion.")
-
-    with col3:
-        excel_data = to_excel(st.session_state.edited_df) # Use the current edited_df for export
-        st.download_button(
-            label="⬇️ Download Excel",
-            data=excel_data,
-            file_name="kpi_dashboard.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-# --- Main App ---
-def main():
-    load_css()
-    
-    # Initialize data
-    if 'current_df' not in st.session_state:
-        st.session_state.current_df = initialize_data()
-    
-    df = st.session_state.current_df
-    
-    # Banner and Title
-    st.markdown("<h1>📊 KPI Performance Dashboard</h1>", unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Create tabs
-    tab1, tab2 = st.tabs(["Dashboard", "Edit KPIs"])
-
-    with tab1:
-        # Dashboard View
-        display_dashboard(df)
-    
-    with tab2:
-        # KPI Editor View
-        display_editor(df)
-
-def display_dashboard(df):
-    """Display the dashboard view with KPIs and visualizations."""
-    # Enhanced KPI Summary Cards
-    st.subheader("📊 KPI Summary")
-    
-    card_data = df.copy()
-    card_data["Actual_Numeric"] = card_data["Actuals"].apply(extract_numeric)
-    card_data["Target_Numeric"] = card_data["Target"].apply(extract_numeric)
-    card_data["KPI_Type"] = card_data["KPI"].apply(get_kpi_type)
-    card_data["Performance_Status"] = card_data.apply(
-        lambda row: get_performance_status(row["Actual_Numeric"], row["Target_Numeric"], row["KPI_Type"]),
-        axis=1
-    )
-    
-    # Create columns for cards - 5 per row
-    num_kpis = len(card_data)
-    cols_per_row = 5
-    num_rows = (num_kpis + cols_per_row - 1) // cols_per_row
-
-    for i in range(num_rows):
-        cols = st.columns(cols_per_row)
-        for idx in range(i * cols_per_row, min((i + 1) * cols_per_row, num_kpis)):
-            row = card_data.iloc[idx]
-            status = row['Performance_Status']
-            
-            # Determine icon and status class
-            if status == 'exceeds':
-                icon = '🚀'
-                status_class = 'kpi-exceeds'
-                badge_color = "linear-gradient(135deg, #00E676, #00C853)"
-            elif status == 'below':
-                icon = '⚠️'
-                status_class = 'kpi-below'
-                badge_color = "linear-gradient(135deg, #FF5252, #FF1744)"
-            else:
-                icon = '🔍'
-                status_class = 'kpi-neutral'
-                badge_color = "linear-gradient(135deg, #FFD600, #FFAB00)"
-            
-            with cols[idx % cols_per_row]:
-                st.markdown(
-                    f"""
-                    <div class="kpi-card {status_class}">
-                        <h3><span class="kpi-icon">{icon}</span> {row['KPI'].split('(')[0].strip()}</h3>
-                        <div class="value">{row['Actuals']}</div>
-                        <div class="target">Target: {row['Target']}</div>
-                        <div class="variance">Variance: {row['Variance']}</div>
-                        <div style="margin-top: 10px; background: {badge_color}; padding: 5px 10px; border-radius: 50px; display: inline-block; font-size: 12px; font-weight: 600; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">
-                            {icon} {'Exceeds' if status == 'exceeds' else 'Below' if status == 'below' else 'Neutral'}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-    # Current KPI Performance - Table View
-    st.subheader("📈 Current KPI Performance")
-    
-    display_df = df.copy()
-    display_df["Actual_Numeric"] = display_df["Actuals"].apply(extract_numeric)
-    display_df["Target_Numeric"] = display_df["Target"].apply(extract_numeric)
-    display_df["KPI_Type"] = display_df["KPI"].apply(get_kpi_type)
-    display_df["Performance_Status"] = display_df.apply(
-        lambda row: get_performance_status(row["Actual_Numeric"], row["Target_Numeric"], row["KPI_Type"]),
-        axis=1
-    )
-    
-    table_df = display_df[["KPI", "Target", "Actuals", "Variance", "Comments"]].copy()
-    table_df["Status"] = display_df["Performance_Status"].apply(create_status_badge)
-    
-    def style_row(row):
-        variance_str = str(row['Variance'])
-        kpi_type = get_kpi_type(row['KPI'])
-        variance_num = extract_numeric(variance_str)
-        
-        if kpi_type == 'lower_is_better':
-            variance_color = '#00E676' if variance_num < 0 else '#FF5252' if variance_num > 0 else '#FFD600'
-        else:
-            variance_color = '#00E676' if variance_num > 0 else '#FF5252' if variance_num < 0 else '#FFD600'
-        
-        status = row['Status']
-        status_color = '#00E676' if status == 'Exceeds' else '#FF5252' if status == 'Below' else '#FFD600'
-        
-        return [
-            '' if col != 'Variance' and col != 'Status' else
-            f'color: {variance_color}; font-weight: bold' if col == 'Variance' else
-            f'color: {status_color}; font-weight: bold; background: {status_color}20; border-radius: 10px; padding: 5px;'
-            for col in table_df.columns
-        ]
-    
-    styled_df = table_df.style.apply(style_row, axis=1).set_properties(**{
-        'text-align': 'center',
-        'font-size': '14px',
-        'padding': '12px',
-        'border': 'none'
-    })
-    
-    st.dataframe(styled_df, use_container_width=True, hide_index=True)
-
-    # Enhanced Visualizations
-    st.subheader("📊 Key Performance Insights")
-    
+@st.cache_data
+def load_data(file, file_path=None):
     try:
-        visual_df = df.copy()
-        visual_df["Actual_Numeric"] = visual_df["Actuals"].apply(extract_numeric)
-        visual_df["Target_Numeric"] = visual_df["Target"].apply(extract_numeric)
-        visual_df["KPI_Type"] = visual_df["KPI"].apply(get_kpi_type)
-        visual_df["Performance_Status"] = visual_df.apply(
-            lambda row: get_performance_status(row["Actual_Numeric"], row["Target_Numeric"], row["KPI_Type"]),
-            axis=1
-        )
+        if isinstance(file, str):  # File path
+            df = pd.read_csv(file)
+        elif file.name.endswith('.csv'):  # Uploaded CSV
+            df = pd.read_csv(file)
+        else:  # Uploaded Excel
+            df = pd.read_excel(file, engine='openpyxl')
         
-        viz_tab1, viz_tab2 = st.tabs(["Performance Overview", "Target Achievement"])
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            st.error(f"Missing columns in June file: {', '.join(missing_columns)}")
+            return None
         
-        with viz_tab1:
-            fig1 = px.bar(
-                visual_df,
-                x="KPI",
-                y=["Target_Numeric", "Actual_Numeric"],
-                barmode="group",
-                title="<b>Actual vs Target Performance</b>",
-                color_discrete_map={"Target_Numeric": "#4F81BD", "Actual_Numeric": "#FFA500"},
-                height=500
-            )
-            fig1.update_layout(
-                xaxis_tickangle=-45,
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(color="white")
-            )
-            st.plotly_chart(fig1, use_container_width=True)
-            
-        with viz_tab2:
-            performance_counts = visual_df["Performance_Status"].value_counts().reset_index()
-            performance_counts.columns = ["Status", "Count"]
-            
-            fig2 = px.pie(
-                performance_counts,
-                values="Count",
-                names="Status",
-                title="<b>Overall Target Achievement</b>",
-                color="Status",
-                color_discrete_map={"exceeds": "#00E676", "below": "#FF5252", "neutral": "#FFD600"},
-                hole=0.4,
-                height=500
-            )
-            fig2.update_layout(
-                plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)',
-                font=dict(color="white")
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-            
+        numeric_cols = ['TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
+        for col in numeric_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        if df[numeric_cols].isna().any().any():
+            st.warning("Missing or invalid values in numeric columns for June. Filling with 0.")
+            df[numeric_cols] = df[numeric_cols].fillna(0)
+        
+        # Add replacement category column
+        df['Replacement Category'] = df['Item Category'].apply(map_to_replacement_category)
+        
+        df['Conversion% (Count)'] = (df['WarrantyCount'] / df['TotalCount'] * 100).round(2)
+        df['Conversion% (Price)'] = (df['WarrantyPrice'] / df['TotalSoldPrice'] * 100).where(df['TotalSoldPrice'] > 0, 0).round(2)
+        df['AHSP'] = (df['WarrantyPrice'] / df['WarrantyCount']).where(df['WarrantyCount'] > 0, 0).round(2)
+        df['Month'] = 'June'
+        
+        if file_path and not isinstance(file, str):
+            if file.name.endswith('.csv'):
+                with open(file_path, 'wb') as f:
+                    f.write(file.getvalue())
+            else:
+                df.to_csv(file_path, index=False)
+            st.success("June data saved successfully and available to all users.")
+        
+        return df
     except Exception as e:
-        st.warning(f"📊 Some charts could not be rendered. Error: {str(e)}")
+        st.error(f"Error loading June file: {str(e)}")
+        return None
 
-    # Performance Summary
-    st.subheader("📋 Performance Summary")
-    status_df = df.copy()
-    status_df["Actual_Numeric"] = status_df["Actuals"].apply(extract_numeric)
-    status_df["Target_Numeric"] = status_df["Target"].apply(extract_numeric)
-    status_df["KPI_Type"] = status_df["KPI"].apply(get_kpi_type)
-    status_df["Performance_Status"] = status_df.apply(
-        lambda row: get_performance_status(row["Actual_Numeric"], row["Target_Numeric"], row["KPI_Type"]),
-        axis=1
-    )
+# Load saved data or handle new upload
+df = None
+
+# Sidebar content
+with st.sidebar:
+    st.markdown('<h2 style="color: #3730a3; font-weight: 600;">🔍 Dashboard Controls</h2>', unsafe_allow_html=True)
+    st.markdown('<hr style="border: 1px solid #e5e7eb; margin: 10px 0;">', unsafe_allow_html=True)
     
-    status_display_map = {
-        'exceeds': "✅ Exceeds Target",
-        'below': "⚠️ Below Target",
-        'neutral': "🔍 Neutral"
+    # File upload form
+    st.markdown('<h3 style="color: #3730a3; font-weight: 500;">📁 Upload June Data</h3>', unsafe_allow_html=True)
+    with st.form("upload_form"):
+        june_file = st.file_uploader("June Data", type=["csv", "xlsx", "xls"], key="june")
+        upload_password = st.text_input("Upload Password", type="password", placeholder="Enter password to upload")
+        submit_upload = st.form_submit_button("Upload", type="primary")
+        if submit_upload:
+            if authenticate("admin", upload_password):
+                if june_file:
+                    df = load_data(june_file, JUNE_FILE_PATH)
+                else:
+                    st.warning("Please select a file to upload.")
+            else:
+                st.error("Invalid password. Upload failed.")
+
+    # Admin login
+    st.markdown('<hr style="border: 1px solid #e5e7eb; margin: 20px 0;">', unsafe_allow_html=True)
+    if st.session_state.user_role == "admin" and st.session_state.authenticated:
+        st.button("Logout", on_click=lambda: st.session_state.update(authenticated=False, show_upload_form=False, user_role="non-admin"))
+    else:
+        st.button("Admin Login", on_click=lambda: st.session_state.update(show_upload_form=True))
+        if st.session_state.show_upload_form and not st.session_state.authenticated:
+            with st.form("login_form"):
+                st.markdown('<h3 style="color: #3730a3; font-weight: 500;">🔐 Admin Login</h3>', unsafe_allow_html=True)
+                username = st.text_input("Username", placeholder="Enter your username")
+                password = st.text_input("Password", type="password", placeholder="Enter your password")
+                submit_login = st.form_submit_button("Login", type="primary")
+                if submit_login:
+                    if authenticate(username, password):
+                        st.session_state.authenticated = True
+                        st.session_state.user_role = "admin"
+                        st.success("Logged in successfully!")
+                    else:
+                        st.error("Invalid username or password.")
+
+    # Sidebar filters
+    st.markdown('<hr style="border: 1px solid #e5e7eb; margin: 20px 0;">', unsafe_allow_html=True)
+    st.markdown('<h3 style="color: #3730a3; font-weight: 500;">⚙️ Filters</h3>', unsafe_allow_html=True)
+    
+    replacement_filter = st.checkbox("Show Replacement Warranty Categories Only")
+    speaker_filter = st.checkbox("Show Speaker Categories Only")
+    future_filter = st.checkbox("Show only FUTURE stores")
+    
+    # Sorting option for Store Performance
+    st.markdown('<hr style="border: 1px solid #e5e7eb; margin: 20px 0;">', unsafe_allow_html=True)
+    sort_order = st.selectbox("Sort Store Performance", ["Descending", "Ascending"], index=0)
+
+# Load saved data if no new upload
+if df is None:
+    if os.path.exists(JUNE_FILE_PATH):
+        df = load_data(JUNE_FILE_PATH)
+        st.info("Loaded saved June data.")
+
+# If no uploaded or saved files, use sample data with speaker categories
+if df is None:
+    data = {
+        'Item Category': ['CEILING FAN', 'PEDESTAL FAN', 'MIXER GRINDER', 'IRON BOX', 'ELECTRIC KETTLE', 'OTG', 'GARMENTS STEAMER', 'INDUCTION COOKER', 'SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE'],
+        'BDM': ['BDM1'] * 12,
+        'RBM': ['RENJITH'] * 12,
+        'Store': ['Kannur FUTURE', 'Store C'] * 6,
+        'Staff Name': ['Staff1', 'Staff2'] * 6,
+        'TotalSoldPrice': [48239177/12] * 12,
+        'WarrantyPrice': [300619/12] * 12,
+        'TotalCount': [5286/12] * 12,
+        'WarrantyCount': [483/12] * 12,
+        'Month': ['June'] * 12
     }
-    status_df["Display_Status"] = status_df["Performance_Status"].map(status_display_map)
+    df = pd.DataFrame(data)
+    df['Replacement Category'] = df['Item Category'].apply(map_to_replacement_category)
+    df['Conversion% (Count)'] = (df['WarrantyCount'] / df['TotalCount'] * 100).round(2)
+    df['Conversion% (Price)'] = (df['WarrantyPrice'] / df['TotalSoldPrice'] * 100).round(2)
+    df['AHSP'] = (df['WarrantyPrice'] / df['WarrantyCount']).where(df['WarrantyPrice'] > 0, 0).round(2)
+    st.warning("Using sample data for June with speaker categories.")
 
-    cols = st.columns(5)
-    metrics = status_df["Display_Status"].value_counts()
+# Apply replacement or speaker filter
+if replacement_filter:
+    replacement_categories = ['FAN', 'MIXER GRINDER', 'IRON BOX', 'ELECTRIC KETTLE', 'OTG', 'STEAMER', 'INDUCTION COOKER']
+    df = df[df['Replacement Category'].isin(replacement_categories)]
+    category_column = 'Replacement Category'
+elif speaker_filter:
+    speaker_categories = ['SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE']
+    df = df[df['Item Category'].isin(speaker_categories)]
+    category_column = 'Item Category'
+else:
+    category_column = 'Item Category'
+
+# Define filters after df is loaded
+with st.sidebar:
+    bdm_options = ['All'] + sorted(df['BDM'].unique().tolist())
+    rbm_options = ['All'] + sorted(df['RBM'].unique().tolist())
+    store_options = ['All'] + sorted(df['Store'].unique().tolist())
+    category_options = ['All'] + sorted(df[category_column].unique().tolist())
+
+    selected_bdm = st.selectbox("BDM", bdm_options, index=0)
+    selected_rbm = st.selectbox("RBM", rbm_options, index=0)
+    selected_store = st.selectbox("Store", store_options, index=0)
+    selected_category = st.selectbox(category_column, category_options, index=0)
+
+    if selected_rbm != 'All':
+        staff_options = ['All'] + sorted(df[df['RBM'] == selected_rbm]['Staff Name'].unique().tolist())
+    else:
+        staff_options = ['All'] + sorted(df['Staff Name'].unique().tolist())
+    selected_staff = st.selectbox("Staff", staff_options, index=0)
+
+# Apply filters
+filtered_df = df.copy()
+if selected_bdm != 'All':
+    filtered_df = filtered_df[filtered_df['BDM'] == selected_bdm]
+if selected_rbm != 'All':
+    filtered_df = filtered_df[filtered_df['RBM'] == selected_rbm]
+if selected_store != 'All':
+    filtered_df = filtered_df[filtered_df['Store'] == selected_store]
+if selected_category != 'All':
+    filtered_df = filtered_df[filtered_df[category_column] == selected_category]
+if selected_staff != 'All':
+    filtered_df = filtered_df[filtered_df['Staff Name'] == selected_staff]
+if future_filter:
+    filtered_df = filtered_df[filtered_df['Store'].str.contains('FUTURE', case=True)]
+
+if filtered_df.empty:
+    st.warning("No data matches your filters.")
+    st.stop()
+
+# Main dashboard
+st.markdown('<h2 class="subheader">📈 June Performance</h2>', unsafe_allow_html=True)
+
+# KPI metrics
+st.markdown('<h3 class="subheader">Warranty Total Count and KPIs</h3>', unsafe_allow_html=True)
+col1, col2, col3, col4 = st.columns(4)
+
+june_total_warranty = filtered_df['WarrantyPrice'].sum()
+june_total_units = filtered_df['TotalCount'].sum()
+june_total_warranty_units = filtered_df['WarrantyCount'].sum()
+june_total_sales = filtered_df['TotalSoldPrice'].sum()
+june_count_conversion = (june_total_warranty_units / june_total_units * 100) if june_total_units > 0 else 0
+june_value_conversion = (june_total_warranty / june_total_sales * 100) if june_total_sales > 0 else 0
+june_ahsp = (june_total_warranty / june_total_warranty_units) if june_total_warranty_units > 0 else 0
+
+with col1:
+    st.metric("Warranty Sales", f"₹{june_total_warranty:,.0f}")
+with col2:
+    st.metric("Count Conversion", f"{june_count_conversion:.2f}%")
+with col3:
+    st.metric("Value Conversion", f"{june_value_conversion:.2f}%")
+with col4:
+    st.metric("AHSP", f"₹{june_ahsp:,.2f}")
+
+# Store Performance
+st.markdown('<h3 class="subheader">🏬 Store Performance</h3>', unsafe_allow_html=True)
+
+store_summary = filtered_df.groupby('Store').agg({
+    'TotalSoldPrice': 'sum',
+    'WarrantyPrice': 'sum',
+    'TotalCount': 'sum',
+    'WarrantyCount': 'sum'
+}).reset_index()
+
+store_summary['Conversion% (Count)'] = (store_summary['WarrantyCount'] / store_summary['TotalCount'] * 100).round(2)
+store_summary['Conversion% (Price)'] = (store_summary['WarrantyPrice'] / store_summary['TotalSoldPrice'] * 100).round(2)
+store_summary['AHSP'] = (store_summary['WarrantyPrice'] / store_summary['WarrantyCount']).where(store_summary['WarrantyCount'] > 0, 0).round(2)
+
+store_display = store_summary[['Store', 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
+store_display.columns = ['Store', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+
+# Create total row
+total_row = pd.DataFrame({
+    'Store': ['Total'],
+    'Count Conv (%)': [(store_summary['WarrantyCount'].sum() / store_summary['TotalCount'].sum() * 100).round(2) if store_summary['TotalCount'].sum() > 0 else 0],
+    'Value Conv (%)': [(store_summary['WarrantyPrice'].sum() / store_summary['TotalSoldPrice'].sum() * 100).round(2) if store_summary['TotalSoldPrice'].sum() > 0 else 0],
+    'AHSP (₹)': [(store_summary['WarrantyPrice'].sum() / store_summary['WarrantyCount'].sum()).round(2) if store_summary['WarrantyCount'].sum() > 0 else 0],
+    'Warranty Sales (₹)': [store_summary['WarrantyPrice'].sum()],
+    'Warranty Units': [store_summary['WarrantyCount'].sum()]
+})
+
+# Split data into non-total and total rows
+non_total_stores = store_display[store_display['Store'] != 'Total']
+# Sort non-total rows based on user selection
+sort_ascending = True if sort_order == "Ascending" else False
+non_total_stores = non_total_stores.sort_values('Count Conv (%)', ascending=sort_ascending)
+# Concatenate sorted non-total rows with total row
+store_display = pd.concat([non_total_stores, total_row], ignore_index=True)
+
+# Apply conditional formatting for low value conversion
+def highlight_low_value_conversion(row):
+    if row['Value Conv (%)'] < 2.0 and row['Store'] != 'Total':
+        return ['background-color: #fee2e2'] * len(row)
+    return [''] * len(row)
+
+st.dataframe(store_display.style.format({
+    'Count Conv (%)': '{:.2f}%',
+    'Value Conv (%)': '{:.2f}%',
+    'AHSP (₹)': '₹{:.2f}',
+    'Warranty Sales (₹)': '₹{:.0f}',
+    'Warranty Units': '{:.0f}'
+}).set_properties(**{'font-weight': 'bold'}, subset=pd.IndexSlice[store_display.index[-1], :])
+.apply(highlight_low_value_conversion, axis=1), 
+use_container_width=True)
+
+fig_store = px.bar(store_summary, 
+                   x='Store', 
+                   y='Conversion% (Count)', 
+                   title='Store Count Conversion - June',
+                   template='plotly_white',
+                   color_discrete_sequence=['#3730a3'])
+fig_store.update_layout(
+    plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)',
+    font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
+    xaxis=dict(showgrid=False, tickangle=45),
+    yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
+)
+st.plotly_chart(fig_store, use_container_width=True)
+
+# RBM Performance
+st.markdown('<h3 class="subheader">👥 RBM Performance</h3>', unsafe_allow_html=True)
+
+rbm_summary = filtered_df.groupby('RBM').agg({
+    'TotalSoldPrice': 'sum',
+    'WarrantyPrice': 'sum',
+    'TotalCount': 'sum',
+    'WarrantyCount': 'sum'
+}).reset_index()
+
+rbm_summary['Conversion% (Count)'] = (rbm_summary['WarrantyCount'] / rbm_summary['TotalCount'] * 100).round(2)
+rbm_summary['Conversion% (Price)'] = (rbm_summary['WarrantyPrice'] / rbm_summary['TotalSoldPrice'] * 100).round(2)
+rbm_summary['AHSP'] = (rbm_summary['WarrantyPrice'] / rbm_summary['WarrantyCount']).where(rbm_summary['WarrantyCount'] > 0, 0).round(2)
+
+rbm_display = rbm_summary[['RBM', 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
+rbm_display.columns = ['RBM', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+rbm_display = rbm_display.sort_values('Count Conv (%)', ascending=False)
+
+st.dataframe(rbm_display.style.format({
+    'Count Conv (%)': '{:.2f}%',
+    'Value Conv (%)': '{:.2f}%',
+    'AHSP (₹)': '₹{:.2f}',
+    'Warranty Sales (₹)': '₹{:.0f}',
+    'Warranty Units': '{:.0f}'
+}), use_container_width=True)
+
+fig_rbm = px.bar(rbm_summary, 
+                 x='RBM', 
+                 y='Conversion% (Count)', 
+                 title='RBM Count Conversion - June',
+                 template='plotly_white',
+                 color_discrete_sequence=['#3730a3'])
+fig_rbm.update_layout(
+    plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)',
+    font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
+    xaxis=dict(showgrid=False, tickangle=45),
+    yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
+)
+st.plotly_chart(fig_rbm, use_container_width=True)
+
+# Category Performance
+st.markdown(f'<h3 class="subheader">📦 {category_column} Performance</h3>', unsafe_allow_html=True)
+
+category_summary = filtered_df.groupby(category_column).agg({
+    'TotalSoldPrice': 'sum',
+    'WarrantyPrice': 'sum',
+    'TotalCount': 'sum',
+    'WarrantyCount': 'sum'
+}).reset_index()
+
+category_summary['Conversion% (Count)'] = (category_summary['WarrantyCount'] / category_summary['TotalCount'] * 100).round(2)
+category_summary['Conversion% (Price)'] = (category_summary['WarrantyPrice'] / category_summary['TotalSoldPrice'] * 100).round(2)
+category_summary['AHSP'] = (category_summary['WarrantyPrice'] / category_summary['WarrantyCount']).where(category_summary['WarrantyCount'] > 0, 0).round(2)
+
+if not category_summary.empty:
+    category_display = category_summary[[category_column, 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
+    category_display.columns = [category_column, 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+    category_display = category_display.sort_values('Count Conv (%)', ascending=False)
+
+    st.dataframe(category_display.style.format({
+        'Count Conv (%)': '{:.2f}%',
+        'Value Conv (%)': '{:.2f}%',
+        'AHSP (₹)': '₹{:.2f}',
+        'Warranty Sales (₹)': '₹{:.0f}',
+        'Warranty Units': '{:.0f}'
+    }), use_container_width=True)
+
+    fig_category = px.bar(category_summary, 
+                          x=category_column, 
+                          y='Conversion% (Count)', 
+                          title=f'{category_column} Count Conversion - June',
+                          template='plotly_white',
+                          color_discrete_sequence=['#3730a3'])
+    fig_category.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
+        xaxis=dict(showgrid=False, tickangle=45),
+        yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
+    )
+    st.plotly_chart(fig_category, use_container_width=True)
+else:
+    st.warning(f"No {category_column.lower()} data available with current filters.")
+
+# Insights
+st.markdown('<h2 class="subheader">💡 Insights & Recommendations</h2>', unsafe_allow_html=True)
+
+TARGET_COUNT_CONVERSION = 15.0
+TARGET_VALUE_CONVERSION = 2.0
+TARGET_AHSP = 1000.0
+
+with st.expander("Performance Against Targets", expanded=True):
+    if june_count_conversion >= TARGET_COUNT_CONVERSION:
+        st.success(f"June Count Conversion ({june_count_conversion:.2f}%) meets or exceeds target ({TARGET_COUNT_CONVERSION}%).")
+    else:
+        st.warning(f"June Count Conversion ({june_count_conversion:.2f}%) is below target ({TARGET_COUNT_CONVERSION}%). Gap: {TARGET_COUNT_CONVERSION - june_count_conversion:.2f}%.")
     
-    with cols[0]:
-        st.metric("✅ Exceeds Target", metrics.get("✅ Exceeds Target", 0))
-    with cols[1]:
-        st.metric("⚠️ Below Target", metrics.get("⚠️ Below Target", 0))
-    with cols[2]:
-        total_kpis = len(status_df)
-        st.metric("📊 Total KPIs Tracked", total_kpis)
-    with cols[3]:
-        percent_achieved = round((metrics.get("✅ Exceeds Target", 0) / total_kpis) * 100 if total_kpis > 0 else 0, 1)
-        st.metric("🎯 Target Achievement", f"{percent_achieved}%")
+    if june_value_conversion >= TARGET_VALUE_CONVERSION:
+        st.success(f"June Value Conversion ({june_value_conversion:.2f}%) meets or exceeds target ({TARGET_VALUE_CONVERSION}%).")
+    else:
+        st.warning(f"June Value Conversion ({june_value_conversion:.2f}%) is below target ({TARGET_VALUE_CONVERSION}%). Gap: {TARGET_VALUE_CONVERSION - june_value_conversion:.2f}%.")
+    
+    if june_ahsp >= TARGET_AHSP:
+        st.success(f"June AHSP (₹{june_ahsp:,.2f}) meets or exceeds target (₹{TARGET_AHSP:,.2f}).")
+    else:
+        st.warning(f"June AHSP (₹{june_ahsp:,.2f}) is below target (₹{TARGET_AHSP:,.2f}). Gap: ₹{TARGET_AHSP - june_ahsp:,.2f}.")
 
-if __name__ == "__main__":
-    main()
+# Store-Level Warranty Sales Analysis
+with st.expander("Store-Level Warranty Sales Analysis", expanded=True):
+    store_warranty = filtered_df.groupby('Store')['WarrantyPrice'].sum().reset_index().sort_values('WarrantyPrice', ascending=False)
+    
+    if not store_warranty.empty:
+        st.write("Warranty sales for each store in June:")
+        st.dataframe(store_warranty.style.format({
+            'WarrantyPrice': '₹{:.0f}'
+        }).set_properties(**{'text-align': 'center'}), use_container_width=True)
+
+        st.write("**Stores with Low Warranty Sales:**")
+        low_sales_stores = store_warranty[store_warranty['WarrantyPrice'] < store_warranty['WarrantyPrice'].quantile(0.25)]
+        if not low_sales_stores.empty:
+            for _, row in low_sales_stores.iterrows():
+                store = row['Store']
+                warranty_sales = row['WarrantyPrice']
+                st.write(f"**{store} (Warranty Sales: ₹{warranty_sales:,.0f}):**")
+                
+                store_data = filtered_df[filtered_df['Store'] == store]
+                category_warranty = store_data.groupby(category_column)['WarrantyPrice'].sum().reset_index()
+                low_categories = category_warranty[category_warranty['WarrantyPrice'] < category_warranty['WarrantyPrice'].quantile(0.5)]
+                
+                reasons = []
+                if not low_categories.empty:
+                    for _, cat_row in low_categories.iterrows():
+                        reasons.append(f"{cat_row[category_column]} warranty sales: ₹{cat_row['WarrantyPrice']:,.0f}.")
+                
+                store_metrics = store_data.agg({
+                    'TotalSoldPrice': 'sum',
+                    'WarrantyCount': 'sum',
+                    'TotalCount': 'sum',
+                    'AHSP': 'mean'
+                })
+                if store_metrics['WarrantyCount'] < store_data['TotalCount'].sum() * 0.1:
+                    reasons.append(f"Low warranty units sold ({store_metrics['WarrantyCount']:.0f} vs. total {store_metrics['TotalCount']:.0f}).")
+                if store_metrics['AHSP'] < TARGET_AHSP:
+                    reasons.append(f"Low average warranty selling price (₹{store_metrics['AHSP']:,.2f}).")
+                
+                if reasons:
+                    for reason in reasons:
+                        st.write(f"- {reason}")
+                    st.write("**Recommendations:**")
+                    st.write("- Review sales strategies for underperforming product categories.")
+                    st.write("- Enhance staff training on warranty benefits.")
+                    st.write("- Introduce targeted promotions for warranty products.")
+                else:
+                    st.write("- No specific reasons identified; further analysis needed.")
+        else:
+            st.info("No stores with significantly low warranty sales.")
+    else:
+        st.info("No warranty sales data available for stores with current filters.")
+
+# Improvement Opportunities
+with st.expander("Improvement Opportunities", expanded=True):
+    low_count_performers = store_summary[store_summary['Conversion% (Count)'] < TARGET_COUNT_CONVERSION]
+    low_value_performers = store_summary[store_summary['Conversion% (Price)'] < TARGET_VALUE_CONVERSION]
+    low_ahsp_performers = store_summary[store_summary['AHSP'] < TARGET_AHSP]
+    
+    if not low_count_performers.empty:
+        st.write(f"These stores have below-target count conversion (target: {TARGET_COUNT_CONVERSION}%):")
+        for _, row in low_count_performers.iterrows():
+            st.write(f"- {row['Store']}: {row['Conversion% (Count)']:.2f}%")
+    else:
+        st.success(f"All stores meet or exceed the count conversion target ({TARGET_COUNT_CONVERSION}%) in June.")
+
+    if not low_value_performers.empty:
+        st.write(f"These stores have below-target value conversion (target: {TARGET_VALUE_CONVERSION}%):")
+        for _, row in low_value_performers.iterrows():
+            st.write(f"- {row['Store']}: {row['Conversion% (Price)']:.2f}%")
+    else:
+        st.success(f"All stores meet or exceed the value conversion target ({TARGET_VALUE_CONVERSION}%) in June.")
+
+    if not low_ahsp_performers.empty:
+        st.write(f"These stores have below-target AHSP (target: ₹{TARGET_AHSP:,.2f}):")
+        for _, row in low_ahsp_performers.iterrows():
+            st.write(f"- {row['Store']}: ₹{row['AHSP']:,.2f}")
+    else:
+        st.success(f"All stores meet or exceed the AHSP target (₹{TARGET_AHSP:,.2f}) in June.")
+
+    if not low_count_performers.empty or not low_value_performers.empty or not low_ahsp_performers.empty:
+        st.write("**Recommendations:**")
+        st.write("1. Provide additional training on warranty benefits to improve conversion rates.")
+        st.write("2. Create targeted promotions for high-value warranty products.")
+        st.write("3. Review staffing and sales strategies in underperforming stores.")
+        st.write("4. Implement incentives for selling higher-value warranty packages.")
+    else:
+        st.write("**Recommendations:**")
+        st.write("1. Maintain current strategies to sustain performance.")
+        st.write("2. Explore opportunities to exceed targets through innovative promotions.")
+
+# FUTURE Stores Analysis
+if future_filter or any('FUTURE' in store for store in filtered_df['Store'].unique()):
+    with st.expander("FUTURE Stores Analysis", expanded=True):
+        future_stores = filtered_df[filtered_df['Store'].str.contains('FUTURE', case=True)]
+        if not future_stores.empty:
+            future_summary = future_stores.agg({
+                'TotalSoldPrice': 'sum',
+                'WarrantyPrice': 'sum',
+                'TotalCount': 'sum',
+                'WarrantyCount': 'sum',
+                'AHSP': 'mean'
+            })
+            future_count_conversion = (future_summary['WarrantyCount'] / future_summary['TotalCount'] * 100) if future_summary['TotalCount'] > 0 else 0
+            future_value_conversion = (future_summary['WarrantyPrice'] / future_summary['TotalSoldPrice'] * 100) if future_summary['TotalSoldPrice'] > 0 else 0
+            future_ahsp = future_summary['AHSP']
+            
+            st.write(f"Average count conversion in FUTURE stores: {future_count_conversion:.2f}%")
+            st.write(f"Average value conversion in FUTURE stores: {future_value_conversion:.2f}%")
+            st.write(f"Average AHSP in FUTURE stores: ₹{future_ahsp:,.2f}")
+            
+            if future_count_conversion < TARGET_COUNT_CONVERSION or future_value_conversion < TARGET_VALUE_CONVERSION or future_ahsp < TARGET_AHSP:
+                st.warning("FUTURE stores are below target in June.")
+                st.write("**Recommendations:**")
+                st.write("- Conduct store-specific training to boost conversion rates.")
+                st.write("- Analyze customer demographics for targeted promotions.")
+                st.write("- Review warranty pricing strategy to improve AHSP.")
+            else:
+                st.success("FUTURE stores meet or exceed targets in June!")
+        else:
+            st.info("No FUTURE stores in current selection")
+
+# Replacement Warranty Categories Analysis
+if replacement_filter:
+    with st.expander("Replacement Warranty Categories Deep Dive", expanded=True):
+        st.markdown('<h3 class="subheader">🔄 Replacement Warranty Category Performance</h3>', unsafe_allow_html=True)
+        
+        replacement_sales = filtered_df.groupby('Replacement Category').agg({
+            'TotalSoldPrice': 'sum',
+            'WarrantyPrice': 'sum',
+            'TotalCount': 'sum',
+            'WarrantyCount': 'sum'
+        }).reset_index()
+        
+        replacement_sales['Conversion% (Count)'] = (replacement_sales['WarrantyCount'] / replacement_sales['TotalCount'] * 100).round(2)
+        replacement_sales['Conversion% (Price)'] = (replacement_sales['WarrantyPrice'] / replacement_sales['TotalSoldPrice'] * 100).round(2)
+        replacement_sales['AHSP'] = (replacement_sales['WarrantyPrice'] / replacement_sales['WarrantyCount']).where(replacement_sales['WarrantyCount'] > 0, 0).round(2)
+        
+        display_df = replacement_sales[['Replacement Category', 'WarrantyPrice', 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP']]
+        display_df.columns = ['Replacement Category', 'Warranty Sales (₹)', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)']
+        
+        st.dataframe(display_df.style.format({
+            'Warranty Sales (₹)': '₹{:.0f}',
+            'Count Conv (%)': '{:.2f}%',
+            'Value Conv (%)': '{:.2f}%',
+            'AHSP (₹)': '₹{:.2f}'
+        }), use_container_width=True)
+        
+        fig_replacement = px.bar(replacement_sales, 
+                                x='Replacement Category', 
+                                y='Conversion% (Count)', 
+                                title='Replacement Category Count Conversion - June',
+                                template='plotly_white',
+                                color_discrete_sequence=['#3730a3'])
+        fig_replacement.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
+            xaxis=dict(showgrid=False, tickangle=45),
+            yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
+        )
+        st.plotly_chart(fig_replacement, use_container_width=True)
+
+# Speaker Categories Analysis
+if speaker_filter:
+    with st.expander("Speaker Categories Deep Dive", expanded=True):
+        st.markdown('<h3 class="subheader">🔊 Speaker Category Performance</h3>', unsafe_allow_html=True)
+        
+        speaker_categories = ['SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE']
+        speaker_sales = filtered_df[filtered_df['Item Category'].isin(speaker_categories)].groupby('Item Category').agg({
+            'TotalSoldPrice': 'sum',
+            'WarrantyPrice': 'sum',
+            'TotalCount': 'sum',
+            'WarrantyCount': 'sum'
+        }).reset_index()
+        
+        speaker_sales['Conversion% (Count)'] = (speaker_sales['WarrantyCount'] / speaker_sales['TotalCount'] * 100).round(2)
+        speaker_sales['Conversion% (Price)'] = (speaker_sales['WarrantyPrice'] / speaker_sales['TotalSoldPrice'] * 100).round(2)
+        speaker_sales['AHSP'] = (speaker_sales['WarrantyPrice'] / speaker_sales['WarrantyCount']).where(speaker_sales['WarrantyCount'] > 0, 0).round(2)
+        
+        display_df = speaker_sales[['Item Category', 'WarrantyPrice', 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP']]
+        display_df.columns = ['Speaker Category', 'Warranty Sales (₹)', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)']
+        
+        st.dataframe(display_df.style.format({
+            'Warranty Sales (₹)': '₹{:.0f}',
+            'Count Conv (%)': '{:.2f}%',
+            'Value Conv (%)': '{:.2f}%',
+            'AHSP (₹)': '₹{:.2f}'
+        }), use_container_width=True)
+        
+        fig_speaker = px.bar(speaker_sales, 
+                             x='Item Category', 
+                             y='Conversion% (Count)', 
+                             title='Speaker Category Count Conversion - June',
+                             template='plotly_white',
+                             color_discrete_sequence=['#3730a3'])
+        fig_speaker.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
+            xaxis=dict(showgrid=False, tickangle=45),
+            yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
+        )
+        st.plotly_chart(fig_speaker, use_container_width=True)
+
+# Correlation Analysis
+st.markdown('<h3 class="subheader">🔗 Correlation Analysis</h3>', unsafe_allow_html=True)
+corr_matrix = filtered_df[['TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount', 'AHSP']].corr()
+fig_corr = px.imshow(
+    corr_matrix,
+    text_auto=True,
+    title="Correlation Matrix of Key Metrics - June",
+    template='plotly_white',
+    color_continuous_scale='Blues',
+    zmin=-1,
+    zmax=1
+)
+fig_corr.update_layout(
+    plot_bgcolor='rgba(0,0,0,0)',
+    paper_bgcolor='rgba(0,0,0,0)',
+    font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937")
+)
+st.plotly_chart(fig_corr, use_container_width=True)
