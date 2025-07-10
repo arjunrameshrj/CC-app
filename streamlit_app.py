@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import os
 import hashlib
+from io import BytesIO
 
 # Streamlit page configuration
 st.set_page_config(page_title="Warranty Conversion Dashboard", layout="wide", initial_sidebar_state="expanded")
@@ -139,8 +140,85 @@ st.markdown("""
             font-weight: 500;
             color: #3730a3;
         }
+        .download-btn {
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .download-btn button {
+            background: linear-gradient(90deg, #10b981, #059669);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .download-btn button:hover {
+            background: linear-gradient(90deg, #059669, #047857);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
     </style>
 """, unsafe_allow_html=True)
+
+# Function to convert DataFrame to Excel for download
+def to_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Store Performance')
+        workbook = writer.book
+        worksheet = writer.sheets['Store Performance']
+        
+        # Add formatting
+        header_format = workbook.add_format({
+            'bold': True,
+            'text_wrap': True,
+            'valign': 'top',
+            'fg_color': '#3730a3',
+            'font_color': 'white',
+            'border': 1,
+            'align': 'center'
+        })
+        
+        # Format the header
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+        
+        # Add conditional formatting for low conversion
+        low_conversion_format = workbook.add_format({'bg_color': '#fee2e2'})
+        value_conv_col = df.columns.get_loc('Value Conv (%)') if 'Value Conv (%)' in df.columns else None
+        
+        if value_conv_col is not None:
+            worksheet.conditional_format(1, value_conv_col, len(df), value_conv_col, {
+                'type': 'cell',
+                'criteria': '<',
+                'value': 2.0,
+                'format': low_conversion_format
+            })
+        
+        # Format numbers
+        num_format = workbook.add_format({'num_format': '#,##0.00'})
+        percent_format = workbook.add_format({'num_format': '0.00%'})
+        currency_format = workbook.add_format({'num_format': '₹#,##0.00'})
+        
+        # Apply formats to appropriate columns
+        for col_num, col_name in enumerate(df.columns):
+            if 'Conv (%)' in col_name:
+                worksheet.set_column(col_num, col_num, None, percent_format)
+            elif 'AHSP' in col_name or 'Warranty Sales' in col_name:
+                worksheet.set_column(col_num, col_num, None, currency_format)
+            elif df[col_name].dtype in ['float64', 'int64']:
+                worksheet.set_column(col_num, col_num, None, num_format)
+        
+        # Bold the total row if it exists
+        if 'Total' in df['Store'].values:
+            total_row_format = workbook.add_format({'bold': True})
+            total_row_index = df.index[df['Store'] == 'Total'][0] + 1  # +1 for header
+            worksheet.set_row(total_row_index, None, total_row_format)
+    
+    processed_data = output.getvalue()
+    return processed_data
 
 # Create data directory if it doesn't exist
 DATA_DIR = "data"
@@ -453,15 +531,26 @@ def highlight_low_value_conversion(row):
         return ['background-color: #fee2e2'] * len(row)
     return [''] * len(row)
 
-st.dataframe(store_display.style.format({
+styled_store_display = store_display.style.format({
     'Count Conv (%)': '{:.2f}%',
     'Value Conv (%)': '{:.2f}%',
     'AHSP (₹)': '₹{:.2f}',
     'Warranty Sales (₹)': '₹{:.0f}',
     'Warranty Units': '{:.0f}'
-}).set_properties(**{'font-weight': 'bold'}, subset=pd.IndexSlice[store_display.index[-1], :])
-.apply(highlight_low_value_conversion, axis=1), 
-use_container_width=True)
+}).set_properties(**{'font-weight': 'bold'}, subset=pd.IndexSlice[store_display.index[-1], :]).apply(highlight_low_value_conversion, axis=1)
+
+st.dataframe(styled_store_display, use_container_width=True)
+
+# Add Excel download button for Store Performance
+st.markdown('<div class="download-btn">', unsafe_allow_html=True)
+excel_data = to_excel(store_display)
+st.download_button(
+    label="📥 Download Store Performance as Excel",
+    data=excel_data,
+    file_name="store_performance_june.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+st.markdown('</div>', unsafe_allow_html=True)
 
 fig_store = px.bar(store_summary, 
                    x='Store', 
