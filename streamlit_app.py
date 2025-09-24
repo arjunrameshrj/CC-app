@@ -286,7 +286,7 @@ if 'user_role' not in st.session_state:
     st.session_state.user_role = "non-admin"
 
 # Main dashboard
-st.markdown('<h1 class="main-header">📊 Warranty Conversion Analysis Dashboard - June</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">📊 Warranty Conversion Analysis Dashboard - sep</h1>', unsafe_allow_html=True)
 
 # Load data function
 required_columns = ['Item Category', 'BDM', 'RBM', 'Store', 'Staff Name', 'TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
