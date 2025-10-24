@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import os
 import hashlib
 from io import BytesIO
@@ -8,213 +9,434 @@ from io import BytesIO
 # Streamlit page configuration
 st.set_page_config(page_title="Warranty Conversion Dashboard", layout="wide", initial_sidebar_state="expanded")
 
-# Custom CSS for professional styling
+# Enhanced CSS for modern, attractive styling
 st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-        body {
-            font-family: 'Poppins', 'Inter', sans-serif;
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
+        
         .stApp {
-            background: linear-gradient(135deg, #dbeafe 0%, #f9fafb 100%);
-            padding: 20px;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #dbeafe 100%);
+            background-attachment: fixed;
         }
+        
+        .main .block-container {
+            padding: 2rem 3rem;
+            max-width: 1400px;
+        }
+        
+        /* Main Header */
         .main-header {
-            color: #3730a3;
-            font-size: 2.8em;
-            font-weight: 700;
-            text-align: center;
-            margin-bottom: 30px;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        }
-        .subheader {
-            color: #3730a3;
-            font-size: 1.6em;
-            font-weight: 600;
-            margin-top: 25px;
-            margin-bottom: 15px;
-        }
-        .stButton>button {
-            background: linear-gradient(90deg, #3730a3, #4338ca);
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%);
             color: white;
-            border-radius: 10px;
-            padding: 12px 24px;
-            font-weight: 500;
-            border: none;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
+            font-size: 3em;
+            font-weight: 900;
+            text-align: center;
+            padding: 40px;
+            border-radius: 24px;
+            margin-bottom: 40px;
+            box-shadow: 0 25px 70px rgba(59, 130, 246, 0.5);
+            letter-spacing: -1px;
+            animation: slideDown 0.6s ease-out;
+            position: relative;
+            overflow: hidden;
         }
+        
+        .main-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: rotate 20s linear infinite;
+        }
+        
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Subheaders */
+        .subheader {
+            color: #1e293b;
+            font-size: 1.75em;
+            font-weight: 800;
+            margin: 40px 0 25px 0;
+            padding: 20px 25px;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border-radius: 16px;
+            border-left: 6px solid #3b82f6;
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.15);
+            position: relative;
+        }
+        
+        .subheader::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 25px;
+            right: 25px;
+            height: 3px;
+            background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
+            border-radius: 2px;
+        }
+        
+        /* Buttons */
+        .stButton>button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 14px 28px;
+            font-weight: 600;
+            font-size: 15px;
+            border: none;
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
         .stButton>button:hover {
-            background: linear-gradient(90deg, #06b6d4, #22d3ee);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(102, 126, 234, 0.5);
+        }
+        
+        .stButton>button:active {
             transform: translateY(-1px);
         }
-        .stTextInput>div>input {
-            border-radius: 8px;
-            border: 1px solid #d1d5db;
-            padding: 12px;
-            background-color: #ffffff;
-            transition: border-color 0.3s ease;
+        
+        /* Download Button */
+        .stDownloadButton>button {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-weight: 600;
+            border: none;
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .stTextInput>div>input:focus {
-            border-color: #06b6d4;
-            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+        
+        .stDownloadButton>button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(16, 185, 129, 0.5);
         }
+        
+        /* Input Fields */
+        .stTextInput>div>div>input,
         .stSelectbox>div>div>select {
-            border-radius: 8px;
-            border: 1px solid #d1d5db;
-            padding: 12px;
-            background-color: #ffffff;
-            color: #1f2937;
-            transition: border-color 0.3s ease;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            padding: 12px 16px;
+            background-color: white;
+            transition: all 0.3s ease;
+            font-size: 14px;
         }
+        
+        .stTextInput>div>div>input:focus,
         .stSelectbox>div>div>select:focus {
-            border-color: #06b6d4;
-            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            outline: none;
         }
-        .stCheckbox label {
-            color: #1f2937;
-            font-weight: 500;
+        
+        /* Sidebar */
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border-right: none;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.08);
         }
-        .sidebar .sidebar-content {
-            background: #ffffff;
-            border-right: 2px solid transparent;
-            border-image: linear-gradient(to bottom, #3730a3, #06b6d4) 1;
-            padding: 25px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        
+        [data-testid="stSidebar"] .stForm {
+            background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%);
+            padding: 24px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            border: 2px solid #e0e7ff;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
         }
-        .sidebar .stForm {
-            background-color: #f3f4f6;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            color: #1e293b;
+            font-weight: 700;
+            margin-bottom: 16px;
         }
-        .stDataFrame {
-            border-radius: 12px;
+        
+        /* Metrics */
+        [data-testid="stMetricValue"] {
+            font-size: 2.2em;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        [data-testid="stMetricLabel"] {
+            font-size: 0.95em;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        div[data-testid="metric-container"] {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            padding: 28px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.15);
+            border: 2px solid #e0e7ff;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
             overflow: hidden;
-            background-color: #ffffff;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            padding: 10px;
-            text-align: center;
         }
-        .stDataFrame table {
-            margin-left: auto;
-            margin-right: auto;
-            width: 100%;
+        
+        div[data-testid="metric-container"]::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         }
-        .stDataFrame th {
-            background-color: #3730a3 !important;
+        
+        div[data-testid="metric-container"]:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(102, 126, 234, 0.25);
+            border-color: #c7d2fe;
+        }
+        
+        /* DataFrames */
+        .stDataFrame {
+            border-radius: 16px;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .stDataFrame thead tr th {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%) !important;
             color: white !important;
-            font-weight: 600 !important;
+            font-weight: 700 !important;
             text-align: center !important;
+            padding: 16px !important;
+            font-size: 14px !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        .stDataFrame td {
+        
+        .stDataFrame tbody tr td {
             text-align: center !important;
+            padding: 14px !important;
+            font-size: 14px !important;
+            border-bottom: 1px solid #f1f5f9 !important;
+            color: #1e293b !important;
+            font-weight: 500 !important;
         }
+        
+        .stDataFrame tbody tr:hover {
+            background-color: #f1f5f9 !important;
+        }
+        
+        .stDataFrame tbody tr:last-child {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+            font-weight: 700 !important;
+            border-top: 3px solid #f59e0b !important;
+        }
+        
+        .stDataFrame tbody tr:last-child td {
+            color: #92400e !important;
+            font-weight: 700 !important;
+            font-size: 15px !important;
+        }
+        
+        /* Charts */
+        .stPlotlyChart {
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            background: white;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        /* Alert Boxes */
+        .stSuccess, .stWarning, .stInfo, .stError {
+            border-radius: 12px;
+            padding: 20px;
+            margin: 16px 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            font-weight: 500;
+            border: none;
+        }
+        
+        .stSuccess {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            color: #065f46;
+        }
+        
+        .stWarning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            color: #92400e;
+        }
+        
+        .stInfo {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            color: #1e40af;
+        }
+        
+        .stError {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            color: #991b1b;
+        }
+        
+        /* Expander */
+        .streamlit-expanderHeader {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 12px;
+            padding: 16px;
+            font-weight: 600;
+            color: #1e293b;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .streamlit-expanderHeader:hover {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+        }
+        
+        /* Checkbox */
+        .stCheckbox label {
+            color: #1e293b;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        /* Slider */
+        .stSlider [data-testid="stTickBar"] {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        /* Hide Streamlit branding */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        
+        /* Separator */
+        hr {
+            border: none;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #667eea, transparent);
+            margin: 30px 0;
+        }
+        
+        /* Low conversion highlight */
         .low-value-conversion {
             background-color: #fee2e2 !important;
-        }
-        .stPlotlyChart {
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            background-color: #ffffff;
-            padding: 10px;
-        }
-        .stSuccess, .stWarning, .stInfo, .stError {
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        }
-        .stExpander {
-            border-radius: 10px;
-            background-color: #ffffff;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-            margin-bottom: 15px;
-        }
-        .stExpander>summary {
-            background: linear-gradient(to right, #f3f4f6, #ffffff);
-            padding: 12px;
-            font-weight: 500;
-            color: #3730a3;
-        }
-        .download-btn {
-            margin-top: 10px;
-            margin-bottom: 20px;
-        }
-        .download-btn button {
-            background: linear-gradient(90deg, #10b981, #059669);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .download-btn button:hover {
-            background: linear-gradient(90deg, #059669, #047857);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
     </style>
 """, unsafe_allow_html=True)
 
 # Function to convert DataFrame to Excel for download
-def to_excel(df):
+def to_excel(df, sheet_name='Data'):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Store Performance')
-        workbook = writer.book
-        worksheet = writer.sheets['Store Performance']
+        df_export = df.copy()
         
-        # Add formatting
+        percentage_columns = [col for col in df_export.columns if 'Conv (%)' in col]
+        for col in percentage_columns:
+            if col in df_export.columns:
+                df_export[col] = df_export[col] / 100.0
+        
+        df_export.to_excel(writer, index=False, sheet_name=sheet_name)
+        workbook = writer.book
+        worksheet = writer.sheets[sheet_name]
+        
         header_format = workbook.add_format({
             'bold': True,
             'text_wrap': True,
             'valign': 'top',
-            'fg_color': '#3730a3',
+            'fg_color': '#667eea',
             'font_color': 'white',
             'border': 1,
             'align': 'center'
         })
         
-        # Format the header
-        for col_num, value in enumerate(df.columns.values):
+        for col_num, value in enumerate(df_export.columns.values):
             worksheet.write(0, col_num, value, header_format)
         
-        # Add conditional formatting for low conversion
         low_conversion_format = workbook.add_format({'bg_color': '#fee2e2'})
-        value_conv_col = df.columns.get_loc('Value Conv (%)') if 'Value Conv (%)' in df.columns else None
+        value_conv_col = df_export.columns.get_loc('Value Conv (%)') if 'Value Conv (%)' in df_export.columns else None
         
         if value_conv_col is not None:
-            worksheet.conditional_format(1, value_conv_col, len(df), value_conv_col, {
+            worksheet.conditional_format(1, value_conv_col, len(df_export), value_conv_col, {
                 'type': 'cell',
                 'criteria': '<',
-                'value': 2.0,
+                'value': 0.02,
                 'format': low_conversion_format
             })
         
-        # Format numbers
-        num_format = workbook.add_format({'num_format': '#,##0.00'})
-        percent_format = workbook.add_format({'num_format': '0.00%'})
-        currency_format = workbook.add_format({'num_format': '₹#,##0.00'})
+        num_format = workbook.add_format({'num_format': '#,##0.00', 'align': 'center'})
+        percent_format = workbook.add_format({'num_format': '0.00%', 'align': 'center'})
+        currency_format = workbook.add_format({'num_format': '₹#,##0.00', 'align': 'center'})
+        integer_format = workbook.add_format({'num_format': '#,##0', 'align': 'center'})
+        text_format = workbook.add_format({'align': 'center'})
         
-        # Apply formats to appropriate columns
-        for col_num, col_name in enumerate(df.columns):
+        for col_num, col_name in enumerate(df_export.columns):
             if 'Conv (%)' in col_name:
-                worksheet.set_column(col_num, col_num, None, percent_format)
-            elif 'AHSP' in col_name or 'Warranty Sales' in col_name:
-                worksheet.set_column(col_num, col_num, None, currency_format)
-            elif df[col_name].dtype in ['float64', 'int64']:
-                worksheet.set_column(col_num, col_num, None, num_format)
+                worksheet.set_column(col_num, col_num, 15, percent_format)
+            elif 'AHSP' in col_name:
+                worksheet.set_column(col_num, col_num, 15, currency_format)
+            elif 'Sales' in col_name:
+                worksheet.set_column(col_num, col_num, 18, currency_format)
+            elif 'Units' in col_name:
+                worksheet.set_column(col_num, col_num, 15, integer_format)
+            elif df_export[col_name].dtype in ['float64']:
+                worksheet.set_column(col_num, col_num, 15, num_format)
+            elif df_export[col_name].dtype in ['int64']:
+                worksheet.set_column(col_num, col_num, 15, integer_format)
+            else:
+                worksheet.set_column(col_num, col_num, 20, text_format)
         
-        # Bold the total row if it exists
-        if 'Total' in df['Store'].values:
-            total_row_format = workbook.add_format({'bold': True})
-            total_row_index = df.index[df['Store'] == 'Total'][0] + 1  # +1 for header
+        if 'Total' in df_export['Store'].values if 'Store' in df_export.columns else False:
+            total_row_format = workbook.add_format({'bold': True, 'align': 'center'})
+            total_row_index = df_export.index[df_export['Store'] == 'Total'][0] + 1
             worksheet.set_row(total_row_index, None, total_row_format)
     
     processed_data = output.getvalue()
@@ -232,7 +454,7 @@ USER_CREDENTIALS_FILE = os.path.join(DATA_DIR, "user_credentials.txt")
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Initialize user credentials (admin user for file upload access)
+# Initialize user credentials
 def initialize_credentials():
     if not os.path.exists(USER_CREDENTIALS_FILE):
         with open(USER_CREDENTIALS_FILE, 'w') as f:
@@ -277,6 +499,19 @@ def map_to_replacement_category(item_category):
     else:
         return item_category
 
+# Function to check if category is small appliance
+def is_small_appliance(item_category):
+    major_appliances = ['AC', 'TV', 'WASHING MACHINE', 'REFRIGERATOR', 'MICROWAVE OVEN', 'DISH WASHER', 'DRYER']
+    return not any(appliance in item_category.upper() for appliance in major_appliances)
+
+# Function to get appliance type
+def get_appliance_type(item_category):
+    major_appliances = ['AC', 'TV', 'WASHING MACHINE', 'REFRIGERATOR', 'MICROWAVE OVEN', 'DISH WASHER', 'DRYER']
+    if any(appliance in item_category.upper() for appliance in major_appliances):
+        return 'Large Appliance'
+    else:
+        return 'Small Appliance'
+
 # Session state initialization
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
@@ -284,9 +519,13 @@ if 'show_upload_form' not in st.session_state:
     st.session_state.show_upload_form = False
 if 'user_role' not in st.session_state:
     st.session_state.user_role = "non-admin"
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
+if 'current_df' not in st.session_state:
+    st.session_state.current_df = None
 
-# Main dashboard
-st.markdown('<h1 class="main-header">📊 Warranty Conversion Analysis Dashboard - sep</h1>', unsafe_allow_html=True)
+# Main dashboard header
+st.markdown('<div class="main-header">📊 Warranty Conversion Analysis Dashboard - OCT</div>', unsafe_allow_html=True)
 
 # Load data function
 required_columns = ['Item Category', 'BDM', 'RBM', 'Store', 'Staff Name', 'TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
@@ -294,11 +533,11 @@ required_columns = ['Item Category', 'BDM', 'RBM', 'Store', 'Staff Name', 'Total
 @st.cache_data
 def load_data(file, file_path=None):
     try:
-        if isinstance(file, str):  # File path
+        if isinstance(file, str):
             df = pd.read_csv(file)
-        elif file.name.endswith('.csv'):  # Uploaded CSV
+        elif file.name.endswith('.csv'):
             df = pd.read_csv(file)
-        else:  # Uploaded Excel
+        else:
             df = pd.read_excel(file, engine='openpyxl')
         
         missing_columns = [col for col in required_columns if col not in df.columns]
@@ -314,8 +553,8 @@ def load_data(file, file_path=None):
             st.warning("Missing or invalid values in numeric columns for June. Filling with 0.")
             df[numeric_cols] = df[numeric_cols].fillna(0)
         
-        # Add replacement category column
         df['Replacement Category'] = df['Item Category'].apply(map_to_replacement_category)
+        df['Appliance Type'] = df['Item Category'].apply(get_appliance_type)
         
         df['Conversion% (Count)'] = (df['WarrantyCount'] / df['TotalCount'] * 100).round(2)
         df['Conversion% (Price)'] = (df['WarrantyPrice'] / df['TotalSoldPrice'] * 100).where(df['TotalSoldPrice'] > 0, 0).round(2)
@@ -328,11 +567,11 @@ def load_data(file, file_path=None):
                     f.write(file.getvalue())
             else:
                 df.to_csv(file_path, index=False)
-            st.success("June data saved successfully and available to all users.")
+            st.success("✅ June data saved successfully and available to all users.")
         
         return df
     except Exception as e:
-        st.error(f"Error loading June file: {str(e)}")
+        st.error(f"❌ Error loading June file: {str(e)}")
         return None
 
 # Load saved data or handle new upload
@@ -340,294 +579,422 @@ df = None
 
 # Sidebar content
 with st.sidebar:
-    st.markdown('<h2 style="color: #3730a3; font-weight: 600;">🔍 Dashboard Controls</h2>', unsafe_allow_html=True)
-    st.markdown('<hr style="border: 1px solid #e5e7eb; margin: 10px 0;">', unsafe_allow_html=True)
+    st.markdown('<h2 style="color: #1e293b; font-weight: 700; margin-bottom: 20px;">🔍 Dashboard Controls</h2>', unsafe_allow_html=True)
+    st.markdown('<hr>', unsafe_allow_html=True)
     
     # File upload form
-    st.markdown('<h3 style="color: #3730a3; font-weight: 500;">📁 Upload June Data</h3>', unsafe_allow_html=True)
+    st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin-top: 20px;">📁 Upload June Data</h3>', unsafe_allow_html=True)
     with st.form("upload_form"):
         june_file = st.file_uploader("June Data", type=["csv", "xlsx", "xls"], key="june")
         upload_password = st.text_input("Upload Password", type="password", placeholder="Enter password to upload")
-        submit_upload = st.form_submit_button("Upload", type="primary")
+        submit_upload = st.form_submit_button("🚀 Upload", type="primary")
         if submit_upload:
             if authenticate("admin", upload_password):
                 if june_file:
                     df = load_data(june_file, JUNE_FILE_PATH)
+                    if df is not None:
+                        st.session_state.current_df = df
+                        st.session_state.data_loaded = True
+                        st.rerun()
                 else:
-                    st.warning("Please select a file to upload.")
+                    st.warning("⚠️ Please select a file to upload.")
             else:
-                st.error("Invalid password. Upload failed.")
+                st.error("❌ Invalid password. Upload failed.")
 
     # Admin login
-    st.markdown('<hr style="border: 1px solid #e5e7eb; margin: 20px 0;">', unsafe_allow_html=True)
+    st.markdown('<hr>', unsafe_allow_html=True)
     if st.session_state.user_role == "admin" and st.session_state.authenticated:
-        st.button("Logout", on_click=lambda: st.session_state.update(authenticated=False, show_upload_form=False, user_role="non-admin"))
+        st.button("🚪 Logout", on_click=lambda: st.session_state.update(authenticated=False, show_upload_form=False, user_role="non-admin"))
     else:
-        st.button("Admin Login", on_click=lambda: st.session_state.update(show_upload_form=True))
+        st.button("🔐 Admin Login", on_click=lambda: st.session_state.update(show_upload_form=True))
         if st.session_state.show_upload_form and not st.session_state.authenticated:
             with st.form("login_form"):
-                st.markdown('<h3 style="color: #3730a3; font-weight: 500;">🔐 Admin Login</h3>', unsafe_allow_html=True)
+                st.markdown('<h3 style="color: #1e293b; font-weight: 600;">🔐 Admin Login</h3>', unsafe_allow_html=True)
                 username = st.text_input("Username", placeholder="Enter your username")
                 password = st.text_input("Password", type="password", placeholder="Enter your password")
-                submit_login = st.form_submit_button("Login", type="primary")
+                submit_login = st.form_submit_button("✓ Login", type="primary")
                 if submit_login:
                     if authenticate(username, password):
                         st.session_state.authenticated = True
                         st.session_state.user_role = "admin"
-                        st.success("Logged in successfully!")
+                        st.success("✅ Logged in successfully!")
                     else:
-                        st.error("Invalid username or password.")
-
-    # Sidebar filters
-    st.markdown('<hr style="border: 1px solid #e5e7eb; margin: 20px 0;">', unsafe_allow_html=True)
-    st.markdown('<h3 style="color: #3730a3; font-weight: 500;">⚙️ Filters</h3>', unsafe_allow_html=True)
-    
-    replacement_filter = st.checkbox("Show Replacement Warranty Categories Only")
-    speaker_filter = st.checkbox("Show Speaker Categories Only")
-    future_filter = st.checkbox("Show only FUTURE stores")
-    
-    # Sorting option for Store Performance
-    st.markdown('<hr style="border: 1px solid #e5e7eb; margin: 20px 0;">', unsafe_allow_html=True)
-    sort_order = st.selectbox("Sort Store Performance", ["Descending", "Ascending"], index=0)
+                        st.error("❌ Invalid username or password.")
 
 # Load saved data if no new upload
-if df is None:
+if st.session_state.current_df is None:
     if os.path.exists(JUNE_FILE_PATH):
         df = load_data(JUNE_FILE_PATH)
-        st.info("Loaded saved June data.")
+        if df is not None:
+            st.session_state.current_df = df
+            st.session_state.data_loaded = True
 
-# If no uploaded or saved files, use sample data with speaker categories
-if df is None:
+# If no uploaded or saved files, use sample data
+if st.session_state.current_df is None:
     data = {
-        'Item Category': ['CEILING FAN', 'PEDESTAL FAN', 'MIXER GRINDER', 'IRON BOX', 'ELECTRIC KETTLE', 'OTG', 'GARMENTS STEAMER', 'INDUCTION COOKER', 'SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE'],
-        'BDM': ['BDM1'] * 12,
-        'RBM': ['RENJITH'] * 12,
-        'Store': ['Kannur FUTURE', 'Store C'] * 6,
-        'Staff Name': ['Staff1', 'Staff2'] * 6,
-        'TotalSoldPrice': [48239177/12] * 12,
-        'WarrantyPrice': [300619/12] * 12,
-        'TotalCount': [5286/12] * 12,
-        'WarrantyCount': [483/12] * 12,
-        'Month': ['June'] * 12
+        'Item Category': ['CEILING FAN', 'PEDESTAL FAN', 'MIXER GRINDER', 'IRON BOX', 'ELECTRIC KETTLE', 'OTG', 'GARMENTS STEAMER', 'INDUCTION COOKER', 'SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE', 'DISH WASHER', 'MICROWAVE OVEN', 'WASHING MACHINE'],
+        'BDM': ['BDM1'] * 15,
+        'RBM': ['RENJITH'] * 15,
+        'Store': ['Kannur FUTURE', 'Store C', 'Store D'] * 5,
+        'Staff Name': ['Staff1', 'Staff2', 'Staff3'] * 5,
+        'TotalSoldPrice': [48239177/15] * 15,
+        'WarrantyPrice': [300619/15] * 15,
+        'TotalCount': [5286/15] * 15,
+        'WarrantyCount': [483/15] * 15,
+        'Month': ['June'] * 15
     }
     df = pd.DataFrame(data)
     df['Replacement Category'] = df['Item Category'].apply(map_to_replacement_category)
+    df['Appliance Type'] = df['Item Category'].apply(get_appliance_type)
     df['Conversion% (Count)'] = (df['WarrantyCount'] / df['TotalCount'] * 100).round(2)
     df['Conversion% (Price)'] = (df['WarrantyPrice'] / df['TotalSoldPrice'] * 100).round(2)
     df['AHSP'] = (df['WarrantyPrice'] / df['WarrantyCount']).where(df['WarrantyPrice'] > 0, 0).round(2)
-    st.warning("Using sample data for June with speaker categories.")
+    st.session_state.current_df = df
+    st.session_state.data_loaded = True
 
-# Apply replacement or speaker filter
-if replacement_filter:
-    replacement_categories = ['FAN', 'MIXER GRINDER', 'IRON BOX', 'ELECTRIC KETTLE', 'OTG', 'STEAMER', 'INDUCTION COOKER']
-    df = df[df['Replacement Category'].isin(replacement_categories)]
-    category_column = 'Replacement Category'
-elif speaker_filter:
-    speaker_categories = ['SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE']
-    df = df[df['Item Category'].isin(speaker_categories)]
-    category_column = 'Item Category'
-else:
-    category_column = 'Item Category'
+# Now that we have data, set up the filters in sidebar
+if st.session_state.data_loaded and st.session_state.current_df is not None:
+    df = st.session_state.current_df
+    
+    with st.sidebar:
+        # Sidebar filters
+        st.markdown('<hr>', unsafe_allow_html=True)
+        st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin-top: 20px;">⚙️ Filters</h3>', unsafe_allow_html=True)
+        
+        replacement_filter = st.checkbox("🔄 Show Replacement Warranty Categories Only")
+        speaker_filter = st.checkbox("🔊 Show Speaker Categories Only")
+        future_filter = st.checkbox("🏢 Show only FUTURE stores")
+        
+        # Value Conversion range filter
+        st.markdown('<hr>', unsafe_allow_html=True)
+        st.markdown('<h4 style="color: #1e293b; font-weight: 600;">📊 Value Conversion Filter</h4>', unsafe_allow_html=True)
+        
+        store_summary_temp = df.groupby('Store').agg({
+            'TotalSoldPrice': 'sum',
+            'WarrantyPrice': 'sum'
+        }).reset_index()
+        store_summary_temp['Value Conv (%)'] = (store_summary_temp['WarrantyPrice'] / store_summary_temp['TotalSoldPrice'] * 100).where(store_summary_temp['TotalSoldPrice'] > 0, 0).round(2)
+        
+        min_conv = float(store_summary_temp['Value Conv (%)'].min())
+        max_conv = float(store_summary_temp['Value Conv (%)'].max())
+        
+        if min_conv == max_conv:
+            min_conv = max(0, min_conv - 0.1)
+            max_conv = max_conv + 0.1
+        
+        value_conv_range = st.slider(
+            "Filter by Value Conversion (%)",
+            min_value=min_conv,
+            max_value=max_conv,
+            value=(min_conv, max_conv),
+            step=0.1,
+            help="Filter stores based on Value Conversion percentage range"
+        )
+        
+        # Sorting option for all tables
+        st.markdown('<hr>', unsafe_allow_html=True)
+        sort_by = st.selectbox("📊 Sort All Tables By", ["Count Conv (%)", "Value Conv (%)", "AHSP (₹)", "Warranty Sales (₹)", "Warranty Units"], index=0)
+        sort_order = st.selectbox("↕️ Sort Order", ["Descending", "Ascending"], index=0)
 
-# Define filters after df is loaded
-with st.sidebar:
-    bdm_options = ['All'] + sorted(df['BDM'].unique().tolist())
-    rbm_options = ['All'] + sorted(df['RBM'].unique().tolist())
-    store_options = ['All'] + sorted(df['Store'].unique().tolist())
-    category_options = ['All'] + sorted(df[category_column].unique().tolist())
-
-    selected_bdm = st.selectbox("BDM", bdm_options, index=0)
-    selected_rbm = st.selectbox("RBM", rbm_options, index=0)
-    selected_store = st.selectbox("Store", store_options, index=0)
-    selected_category = st.selectbox(category_column, category_options, index=0)
-
-    if selected_rbm != 'All':
-        staff_options = ['All'] + sorted(df[df['RBM'] == selected_rbm]['Staff Name'].unique().tolist())
+    # Apply replacement or speaker filter
+    if replacement_filter:
+        replacement_categories = ['FAN', 'MIXER GRINDER', 'IRON BOX', 'ELECTRIC KETTLE', 'OTG', 'STEAMER', 'INDUCTION COOKER']
+        df = df[df['Replacement Category'].isin(replacement_categories)]
+        category_column = 'Replacement Category'
+    elif speaker_filter:
+        speaker_categories = ['SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE']
+        df = df[df['Item Category'].isin(speaker_categories)]
+        category_column = 'Item Category'
     else:
-        staff_options = ['All'] + sorted(df['Staff Name'].unique().tolist())
-    selected_staff = st.selectbox("Staff", staff_options, index=0)
+        category_column = 'Item Category'
 
-# Apply filters
-filtered_df = df.copy()
-if selected_bdm != 'All':
-    filtered_df = filtered_df[filtered_df['BDM'] == selected_bdm]
-if selected_rbm != 'All':
-    filtered_df = filtered_df[filtered_df['RBM'] == selected_rbm]
-if selected_store != 'All':
-    filtered_df = filtered_df[filtered_df['Store'] == selected_store]
-if selected_category != 'All':
-    filtered_df = filtered_df[filtered_df[category_column] == selected_category]
-if selected_staff != 'All':
-    filtered_df = filtered_df[filtered_df['Staff Name'] == selected_staff]
-if future_filter:
-    filtered_df = filtered_df[filtered_df['Store'].str.contains('FUTURE', case=True)]
+    # Define filters after df is loaded
+    with st.sidebar:
+        bdm_options = ['All'] + sorted(df['BDM'].unique().tolist())
+        rbm_options = ['All'] + sorted(df['RBM'].unique().tolist())
+        store_options = ['All'] + sorted(df['Store'].unique().tolist())
+        category_options = ['All'] + sorted(df[category_column].unique().tolist())
 
-if filtered_df.empty:
-    st.warning("No data matches your filters.")
-    st.stop()
+        selected_bdm = st.selectbox("👔 BDM", bdm_options, index=0)
+        selected_rbm = st.selectbox("👤 RBM", rbm_options, index=0)
+        selected_store = st.selectbox("🏪 Store", store_options, index=0)
+        selected_category = st.selectbox(f"📦 {category_column}", category_options, index=0)
 
-# Main dashboard
-st.markdown('<h2 class="subheader">📈 June Performance</h2>', unsafe_allow_html=True)
+        if selected_rbm != 'All':
+            staff_options = ['All'] + sorted(df[df['RBM'] == selected_rbm]['Staff Name'].unique().tolist())
+        else:
+            staff_options = ['All'] + sorted(df['Staff Name'].unique().tolist())
+        selected_staff = st.selectbox("👨‍💼 Staff", staff_options, index=0)
 
-# KPI metrics
-st.markdown('<h3 class="subheader">Warranty Total Count and KPIs</h3>', unsafe_allow_html=True)
-col1, col2, col3, col4 = st.columns(4)
+    # Apply filters
+    filtered_df = df.copy()
+    if selected_bdm != 'All':
+        filtered_df = filtered_df[filtered_df['BDM'] == selected_bdm]
+    if selected_rbm != 'All':
+        filtered_df = filtered_df[filtered_df['RBM'] == selected_rbm]
+    if selected_store != 'All':
+        filtered_df = filtered_df[filtered_df['Store'] == selected_store]
+    if selected_category != 'All':
+        filtered_df = filtered_df[filtered_df[category_column] == selected_category]
+    if selected_staff != 'All':
+        filtered_df = filtered_df[filtered_df['Staff Name'] == selected_staff]
+    if future_filter:
+        filtered_df = filtered_df[filtered_df['Store'].str.contains('FUTURE', case=True)]
 
-june_total_warranty = filtered_df['WarrantyPrice'].sum()
-june_total_units = filtered_df['TotalCount'].sum()
-june_total_warranty_units = filtered_df['WarrantyCount'].sum()
-june_total_sales = filtered_df['TotalSoldPrice'].sum()
-june_count_conversion = (june_total_warranty_units / june_total_units * 100) if june_total_units > 0 else 0
-june_value_conversion = (june_total_warranty / june_total_sales * 100) if june_total_sales > 0 else 0
-june_ahsp = (june_total_warranty / june_total_warranty_units) if june_total_warranty_units > 0 else 0
+    if filtered_df.empty:
+        st.warning("⚠️ No data matches your filters.")
+        st.stop()
 
-with col1:
-    st.metric("Warranty Sales", f"₹{june_total_warranty:,.0f}")
-with col2:
-    st.metric("Count Conversion", f"{june_count_conversion:.2f}%")
-with col3:
-    st.metric("Value Conversion", f"{june_value_conversion:.2f}%")
-with col4:
-    st.metric("AHSP", f"₹{june_ahsp:,.2f}")
+    # Main dashboard
+    st.markdown('<h2 class="subheader">📈 OCT Performance Overview</h2>', unsafe_allow_html=True)
 
-# Store Performance
-st.markdown('<h3 class="subheader">🏬 Store Performance</h3>', unsafe_allow_html=True)
+    # KPI metrics
+    st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin: 25px 0 15px 0;">🎯 Key Performance Indicators</h3>', unsafe_allow_html=True)
+    col1, col2, col3, col4 = st.columns(4)
 
-store_summary = filtered_df.groupby('Store').agg({
-    'TotalSoldPrice': 'sum',
-    'WarrantyPrice': 'sum',
-    'TotalCount': 'sum',
-    'WarrantyCount': 'sum'
-}).reset_index()
+    june_total_warranty = filtered_df['WarrantyPrice'].sum()
+    june_total_units = filtered_df['TotalCount'].sum()
+    june_total_warranty_units = filtered_df['WarrantyCount'].sum()
+    june_total_sales = filtered_df['TotalSoldPrice'].sum()
+    june_count_conversion = (june_total_warranty_units / june_total_units * 100) if june_total_units > 0 else 0
+    june_value_conversion = (june_total_warranty / june_total_sales * 100) if june_total_sales > 0 else 0
+    june_ahsp = (june_total_warranty / june_total_warranty_units) if june_total_warranty_units > 0 else 0
 
-store_summary['Conversion% (Count)'] = (store_summary['WarrantyCount'] / store_summary['TotalCount'] * 100).round(2)
-store_summary['Conversion% (Price)'] = (store_summary['WarrantyPrice'] / store_summary['TotalSoldPrice'] * 100).round(2)
-store_summary['AHSP'] = (store_summary['WarrantyPrice'] / store_summary['WarrantyCount']).where(store_summary['WarrantyCount'] > 0, 0).round(2)
+    with col1:
+        st.metric("💰 Warranty Sales", f"₹{june_total_warranty:,.0f}")
+    with col2:
+        st.metric("📊 Count Conversion", f"{june_count_conversion:.2f}%")
+    with col3:
+        st.metric("📈 Value Conversion", f"{june_value_conversion:.2f}%")
+    with col4:
+        st.metric("💵 AHSP", f"₹{june_ahsp:,.2f}")
 
-store_display = store_summary[['Store', 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
-store_display.columns = ['Store', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+    # Store Performance
+    st.markdown('<h3 class="subheader">🏬 Store Performance Analysis</h3>', unsafe_allow_html=True)
 
-# Create total row
-total_row = pd.DataFrame({
-    'Store': ['Total'],
-    'Count Conv (%)': [(store_summary['WarrantyCount'].sum() / store_summary['TotalCount'].sum() * 100).round(2) if store_summary['TotalCount'].sum() > 0 else 0],
-    'Value Conv (%)': [(store_summary['WarrantyPrice'].sum() / store_summary['TotalSoldPrice'].sum() * 100).round(2) if store_summary['TotalSoldPrice'].sum() > 0 else 0],
-    'AHSP (₹)': [(store_summary['WarrantyPrice'].sum() / store_summary['WarrantyCount'].sum()).round(2) if store_summary['WarrantyCount'].sum() > 0 else 0],
-    'Warranty Sales (₹)': [store_summary['WarrantyPrice'].sum()],
-    'Warranty Units': [store_summary['WarrantyCount'].sum()]
-})
+    store_summary = filtered_df.groupby('Store').agg({
+        'TotalSoldPrice': 'sum',
+        'WarrantyPrice': 'sum',
+        'TotalCount': 'sum',
+        'WarrantyCount': 'sum'
+    }).reset_index()
 
-# Split data into non-total and total rows
-non_total_stores = store_display[store_display['Store'] != 'Total']
-# Sort non-total rows based on user selection
-sort_ascending = True if sort_order == "Ascending" else False
-non_total_stores = non_total_stores.sort_values('Count Conv (%)', ascending=sort_ascending)
-# Concatenate sorted non-total rows with total row
-store_display = pd.concat([non_total_stores, total_row], ignore_index=True)
+    store_summary['Count Conv (%)'] = (store_summary['WarrantyCount'] / store_summary['TotalCount'] * 100).round(2)
+    store_summary['Value Conv (%)'] = (store_summary['WarrantyPrice'] / store_summary['TotalSoldPrice'] * 100).round(2)
+    store_summary['AHSP'] = (store_summary['WarrantyPrice'] / store_summary['WarrantyCount']).where(store_summary['WarrantyCount'] > 0, 0).round(2)
 
-# Apply conditional formatting for low value conversion
-def highlight_low_value_conversion(row):
-    if row['Value Conv (%)'] < 2.0 and row['Store'] != 'Total':
-        return ['background-color: #fee2e2'] * len(row)
-    return [''] * len(row)
+    store_summary['Count Conv (%)'] = store_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+    store_summary['Value Conv (%)'] = store_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
 
-styled_store_display = store_display.style.format({
-    'Count Conv (%)': '{:.2f}%',
-    'Value Conv (%)': '{:.2f}%',
-    'AHSP (₹)': '₹{:.2f}',
-    'Warranty Sales (₹)': '₹{:.0f}',
-    'Warranty Units': '{:.0f}'
-}).set_properties(**{'font-weight': 'bold'}, subset=pd.IndexSlice[store_display.index[-1], :]).apply(highlight_low_value_conversion, axis=1)
+    store_display = store_summary[['Store', 'WarrantyPrice', 'WarrantyCount', 'Count Conv (%)', 'Value Conv (%)', 'AHSP']].copy()
+    store_display.columns = ['Store', 'Warranty Sales (₹)', 'Warranty Units', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)']
 
-st.dataframe(styled_store_display, use_container_width=True)
+    total_sales = store_summary['TotalSoldPrice'].sum()
+    total_warranty_sales = store_summary['WarrantyPrice'].sum()
+    total_units = store_summary['TotalCount'].sum()
+    total_warranty_units = store_summary['WarrantyCount'].sum()
+    
+    total_count_conv = (total_warranty_units / total_units * 100) if total_units > 0 else 0
+    total_value_conv = (total_warranty_sales / total_sales * 100) if total_sales > 0 else 0
+    total_ahsp = (total_warranty_sales / total_warranty_units) if total_warranty_units > 0 else 0
 
-# Add Excel download button for Store Performance
-st.markdown('<div class="download-btn">', unsafe_allow_html=True)
-excel_data = to_excel(store_display)
-st.download_button(
-    label="📥 Download Store Performance as Excel",
-    data=excel_data,
-    file_name="store_performance_june.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-st.markdown('</div>', unsafe_allow_html=True)
+    total_row = pd.DataFrame({
+        'Store': ['Total'],
+        'Warranty Sales (₹)': [total_warranty_sales],
+        'Warranty Units': [total_warranty_units],
+        'Count Conv (%)': [round(total_count_conv, 2)],
+        'Value Conv (%)': [round(total_value_conv, 2)],
+        'AHSP (₹)': [round(total_ahsp, 2)]
+    })
 
-fig_store = px.bar(store_summary, 
-                   x='Store', 
-                   y='Conversion% (Count)', 
-                   title='Store Count Conversion - June',
-                   template='plotly_white',
-                   color_discrete_sequence=['#3730a3'])
-fig_store.update_layout(
-    plot_bgcolor='rgba(0,0,0,0)',
-    paper_bgcolor='rgba(0,0,0,0)',
-    font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
-    xaxis=dict(showgrid=False, tickangle=45),
-    yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
-)
-st.plotly_chart(fig_store, use_container_width=True)
+    non_total_stores = store_display[store_display['Store'] != 'Total']
 
-# RBM Performance
-st.markdown('<h3 class="subheader">👥 RBM Performance</h3>', unsafe_allow_html=True)
+    if value_conv_range != (min_conv, max_conv):
+        non_total_stores = non_total_stores[
+            (non_total_stores['Value Conv (%)'] >= value_conv_range[0]) & 
+            (non_total_stores['Value Conv (%)'] <= value_conv_range[1])
+        ]
 
-rbm_summary = filtered_df.groupby('RBM').agg({
-    'TotalSoldPrice': 'sum',
-    'WarrantyPrice': 'sum',
-    'TotalCount': 'sum',
-    'WarrantyCount': 'sum'
-}).reset_index()
+    sort_ascending = True if sort_order == "Ascending" else False
 
-rbm_summary['Conversion% (Count)'] = (rbm_summary['WarrantyCount'] / rbm_summary['TotalCount'] * 100).round(2)
-rbm_summary['Conversion% (Price)'] = (rbm_summary['WarrantyPrice'] / rbm_summary['TotalSoldPrice'] * 100).round(2)
-rbm_summary['AHSP'] = (rbm_summary['WarrantyPrice'] / rbm_summary['WarrantyCount']).where(rbm_summary['WarrantyCount'] > 0, 0).round(2)
+    sort_column_mapping = {
+        "Count Conv (%)": "Count Conv (%)",
+        "Value Conv (%)": "Value Conv (%)", 
+        "AHSP (₹)": "AHSP (₹)",
+        "Warranty Sales (₹)": "Warranty Sales (₹)",
+        "Warranty Units": "Warranty Units"
+    }
 
-rbm_display = rbm_summary[['RBM', 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
-rbm_display.columns = ['RBM', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
-rbm_display = rbm_display.sort_values('Count Conv (%)', ascending=False)
+    sort_column = sort_column_mapping.get(sort_by, "Count Conv (%)")
+    non_total_stores = non_total_stores.sort_values(sort_column, ascending=sort_ascending)
 
-st.dataframe(rbm_display.style.format({
-    'Count Conv (%)': '{:.2f}%',
-    'Value Conv (%)': '{:.2f}%',
-    'AHSP (₹)': '₹{:.2f}',
-    'Warranty Sales (₹)': '₹{:.0f}',
-    'Warranty Units': '{:.0f}'
-}), use_container_width=True)
+    final_store_display = pd.concat([non_total_stores, total_row], ignore_index=True)
 
-fig_rbm = px.bar(rbm_summary, 
-                 x='RBM', 
-                 y='Conversion% (Count)', 
-                 title='RBM Count Conversion - June',
-                 template='plotly_white',
-                 color_discrete_sequence=['#3730a3'])
-fig_rbm.update_layout(
-    plot_bgcolor='rgba(0,0,0,0)',
-    paper_bgcolor='rgba(0,0,0,0)',
-    font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
-    xaxis=dict(showgrid=False, tickangle=45),
-    yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
-)
-st.plotly_chart(fig_rbm, use_container_width=True)
+    def highlight_low_value_conversion(row):
+        if row['Value Conv (%)'] < 2.0 and row['Store'] != 'Total':
+            return ['background-color: #fee2e2'] * len(row)
+        return [''] * len(row)
 
-# Category Performance
-st.markdown(f'<h3 class="subheader">📦 {category_column} Performance</h3>', unsafe_allow_html=True)
+    styled_final_display = final_store_display.style.format({
+        'Warranty Sales (₹)': '₹{:,.0f}',
+        'Warranty Units': '{:,.0f}',
+        'Count Conv (%)': '{:.2f}%',
+        'Value Conv (%)': '{:.2f}%',
+        'AHSP (₹)': '₹{:.2f}'
+    }).apply(highlight_low_value_conversion, axis=1)
 
-category_summary = filtered_df.groupby(category_column).agg({
-    'TotalSoldPrice': 'sum',
-    'WarrantyPrice': 'sum',
-    'TotalCount': 'sum',
-    'WarrantyCount': 'sum'
-}).reset_index()
+    st.dataframe(styled_final_display, use_container_width=True)
 
-category_summary['Conversion% (Count)'] = (category_summary['WarrantyCount'] / category_summary['TotalCount'] * 100).round(2)
-category_summary['Conversion% (Price)'] = (category_summary['WarrantyPrice'] / category_summary['TotalSoldPrice'] * 100).round(2)
-category_summary['AHSP'] = (category_summary['WarrantyPrice'] / category_summary['WarrantyCount']).where(category_summary['WarrantyCount'] > 0, 0).round(2)
+    st.download_button(
+        label="📥 Download Store Performance as Excel",
+        data=to_excel(final_store_display, 'Store Performance'),
+        file_name="store_performance_june.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
-if not category_summary.empty:
-    category_display = category_summary[[category_column, 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
-    category_display.columns = [category_column, 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
-    category_display = category_display.sort_values('Count Conv (%)', ascending=False)
+    store_summary_for_chart = store_summary[store_summary['Store'].isin(non_total_stores['Store'])]
 
-    st.dataframe(category_display.style.format({
+    if not store_summary_for_chart.empty:
+        chart_sort_column_mapping = {
+            "Count Conv (%)": "Count Conv (%)",
+            "Value Conv (%)": "Value Conv (%)",
+            "AHSP (₹)": "AHSP",
+            "Warranty Sales (₹)": "WarrantyPrice", 
+            "Warranty Units": "WarrantyCount"
+        }
+        
+        chart_sort_column = chart_sort_column_mapping.get(sort_by, "Count Conv (%)")
+        store_summary_for_chart = store_summary_for_chart.sort_values(chart_sort_column, ascending=sort_ascending)
+        
+        if sort_by == "Value Conv (%)":
+            chart_y_column = 'Value Conv (%)'
+            chart_title = '📊 Store Value Conversion - June'
+            chart_text = 'Value Conv (%)'
+        elif sort_by == "AHSP (₹)":
+            chart_y_column = 'AHSP'
+            chart_title = '💵 Store AHSP - June'
+            chart_text = 'AHSP'
+        elif sort_by == "Warranty Sales (₹)":
+            chart_y_column = 'WarrantyPrice'
+            chart_title = '💰 Store Warranty Sales - June'
+            chart_text = 'WarrantyPrice'
+        elif sort_by == "Warranty Units":
+            chart_y_column = 'WarrantyCount'
+            chart_title = '📦 Store Warranty Units - June'
+            chart_text = 'WarrantyCount'
+        else:
+            chart_y_column = 'Count Conv (%)'
+            chart_title = '📊 Store Count Conversion - June'
+            chart_text = 'Count Conv (%)'
+
+        fig_store = px.bar(store_summary_for_chart, 
+                           x='Store', 
+                           y=chart_y_column, 
+                           title=chart_title,
+                           template='plotly_white',
+                           color=chart_y_column,
+                           color_continuous_scale='Viridis',
+                           text=chart_text)
+        
+        if chart_y_column in ['Count Conv (%)', 'Value Conv (%)']:
+            fig_store.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+        elif chart_y_column == 'AHSP':
+            fig_store.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
+        elif chart_y_column == 'WarrantyPrice':
+            fig_store.update_traces(texttemplate='₹%{text:,.0f}', textposition='outside')
+        else:
+            fig_store.update_traces(texttemplate='%{text:.0f}', textposition='outside')
+        
+        fig_store.update_layout(
+            plot_bgcolor='rgba(255,255,255,1)',
+            paper_bgcolor='rgba(255,255,255,1)',
+            font=dict(family="Inter, sans-serif", size=12, color="#1e293b"),
+            xaxis=dict(showgrid=False, tickangle=45, title_font=dict(size=14, color="#1e293b")),
+            yaxis=dict(showgrid=True, gridcolor='#e2e8f0', title_font=dict(size=14, color="#1e293b")),
+            title_font=dict(size=18, color="#1e293b", family="Inter"),
+            height=550,
+            margin=dict(t=80, b=80, l=60, r=60)
+        )
+        st.plotly_chart(fig_store, use_container_width=True)
+
+    # Staff Performance Table
+    st.markdown('<h3 class="subheader">👨‍💼 Staff Performance Analysis</h3>', unsafe_allow_html=True)
+
+    staff_summary = filtered_df.groupby(['Staff Name', 'Store']).agg({
+        'TotalSoldPrice': 'sum',
+        'WarrantyPrice': 'sum',
+        'TotalCount': 'sum',
+        'WarrantyCount': 'sum'
+    }).reset_index()
+
+    staff_summary['Count Conv (%)'] = (staff_summary['WarrantyCount'] / staff_summary['TotalCount'] * 100).round(2)
+    staff_summary['Value Conv (%)'] = (staff_summary['WarrantyPrice'] / staff_summary['TotalSoldPrice'] * 100).round(2)
+    staff_summary['AHSP'] = (staff_summary['WarrantyPrice'] / staff_summary['WarrantyCount']).where(staff_summary['WarrantyCount'] > 0, 0).round(2)
+
+    staff_summary['Count Conv (%)'] = staff_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+    staff_summary['Value Conv (%)'] = staff_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+
+    staff_display = staff_summary[['Staff Name', 'Store', 'Value Conv (%)', 'Count Conv (%)', 'WarrantyPrice', 'WarrantyCount', 'AHSP']].copy()
+    staff_display.columns = ['Staff Name', 'Store', 'Value Conv (%)', 'Count Conv (%)', 'Warranty Sales (₹)', 'Warranty Units', 'AHSP (₹)']
+    
+    # Apply sorting to staff performance table
+    staff_sort_column_mapping = {
+        "Count Conv (%)": "Count Conv (%)",
+        "Value Conv (%)": "Value Conv (%)", 
+        "AHSP (₹)": "AHSP (₹)",
+        "Warranty Sales (₹)": "Warranty Sales (₹)",
+        "Warranty Units": "Warranty Units"
+    }
+    staff_sort_column = staff_sort_column_mapping.get(sort_by, "Count Conv (%)")
+    staff_display = staff_display.sort_values(staff_sort_column, ascending=sort_ascending)
+
+    st.dataframe(staff_display.style.format({
+        'Value Conv (%)': '{:.2f}%',
+        'Count Conv (%)': '{:.2f}%',
+        'Warranty Sales (₹)': '₹{:.0f}',
+        'Warranty Units': '{:.0f}',
+        'AHSP (₹)': '₹{:.2f}'
+    }), use_container_width=True)
+
+    st.download_button(
+        label="📥 Download Staff Performance as Excel",
+        data=to_excel(staff_display, 'Staff Performance'),
+        file_name="staff_performance_june.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # RBM Performance
+    st.markdown('<h3 class="subheader">👥 RBM Performance Analysis</h3>', unsafe_allow_html=True)
+
+    rbm_summary = filtered_df.groupby('RBM').agg({
+        'TotalSoldPrice': 'sum',
+        'WarrantyPrice': 'sum',
+        'TotalCount': 'sum',
+        'WarrantyCount': 'sum'
+    }).reset_index()
+
+    rbm_summary['Count Conv (%)'] = (rbm_summary['WarrantyCount'] / rbm_summary['TotalCount'] * 100).round(2)
+    rbm_summary['Value Conv (%)'] = (rbm_summary['WarrantyPrice'] / rbm_summary['TotalSoldPrice'] * 100).round(2)
+    rbm_summary['AHSP'] = (rbm_summary['WarrantyPrice'] / rbm_summary['WarrantyCount']).where(rbm_summary['WarrantyCount'] > 0, 0).round(2)
+
+    rbm_summary['Count Conv (%)'] = rbm_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+    rbm_summary['Value Conv (%)'] = rbm_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+
+    rbm_display = rbm_summary[['RBM', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
+    rbm_display.columns = ['RBM', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+    
+    # Apply sorting to RBM performance table
+    rbm_sort_column_mapping = {
+        "Count Conv (%)": "Count Conv (%)",
+        "Value Conv (%)": "Value Conv (%)", 
+        "AHSP (₹)": "AHSP (₹)",
+        "Warranty Sales (₹)": "Warranty Sales (₹)",
+        "Warranty Units": "Warranty Units"
+    }
+    rbm_sort_column = rbm_sort_column_mapping.get(sort_by, "Count Conv (%)")
+    rbm_display = rbm_display.sort_values(rbm_sort_column, ascending=sort_ascending)
+
+    st.dataframe(rbm_display.style.format({
         'Count Conv (%)': '{:.2f}%',
         'Value Conv (%)': '{:.2f}%',
         'AHSP (₹)': '₹{:.2f}',
@@ -635,265 +1002,171 @@ if not category_summary.empty:
         'Warranty Units': '{:.0f}'
     }), use_container_width=True)
 
-    fig_category = px.bar(category_summary, 
-                          x=category_column, 
-                          y='Conversion% (Count)', 
-                          title=f'{category_column} Count Conversion - June',
-                          template='plotly_white',
-                          color_discrete_sequence=['#3730a3'])
-    fig_category.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
-        xaxis=dict(showgrid=False, tickangle=45),
-        yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
+    st.download_button(
+        label="📥 Download RBM Performance as Excel",
+        data=to_excel(rbm_display, 'RBM Performance'),
+        file_name="rbm_performance_june.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    st.plotly_chart(fig_category, use_container_width=True)
+
+    # Product Category Performance with Small Appliance Grouping
+    st.markdown('<h3 class="subheader">📦 Product Category Performance</h3>', unsafe_allow_html=True)
+
+    # Define major appliances that should stay as separate rows
+    major_appliances = ['AC', 'TV', 'WASHING MACHINE', 'REFRIGERATOR', 'MICROWAVE OVEN', 'DISH WASHER', 'DRYER']
+
+    # Create a new column for the grouped category
+    filtered_df['Grouped Category'] = filtered_df['Item Category'].apply(
+        lambda x: 'SMALL APPLIANCE' if x not in major_appliances else x
+    )
+
+    category_summary = filtered_df.groupby('Grouped Category').agg({
+        'TotalSoldPrice': 'sum',
+        'WarrantyPrice': 'sum',
+        'TotalCount': 'sum',
+        'WarrantyCount': 'sum'
+    }).reset_index()
+
+    category_summary['Count Conv (%)'] = (category_summary['WarrantyCount'] / category_summary['TotalCount'] * 100).round(2)
+    category_summary['Value Conv (%)'] = (category_summary['WarrantyPrice'] / category_summary['TotalSoldPrice'] * 100).round(2)
+    category_summary['AHSP'] = (category_summary['WarrantyPrice'] / category_summary['WarrantyCount']).where(category_summary['WarrantyCount'] > 0, 0).round(2)
+
+    category_summary['Count Conv (%)'] = category_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+    category_summary['Value Conv (%)'] = category_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+
+    if not category_summary.empty:
+        category_display = category_summary[['Grouped Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
+        category_display.columns = ['Product Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+        
+        # Apply sorting to category performance table
+        category_sort_column_mapping = {
+            "Count Conv (%)": "Count Conv (%)",
+            "Value Conv (%)": "Value Conv (%)", 
+            "AHSP (₹)": "AHSP (₹)",
+            "Warranty Sales (₹)": "Warranty Sales (₹)",
+            "Warranty Units": "Warranty Units"
+        }
+        category_sort_column = category_sort_column_mapping.get(sort_by, "Count Conv (%)")
+        category_display = category_display.sort_values(category_sort_column, ascending=sort_ascending)
+
+        st.dataframe(category_display.style.format({
+            'Count Conv (%)': '{:.2f}%',
+            'Value Conv (%)': '{:.2f}%',
+            'AHSP (₹)': '₹{:.2f}',
+            'Warranty Sales (₹)': '₹{:.0f}',
+            'Warranty Units': '{:.0f}'
+        }), use_container_width=True)
+
+        st.download_button(
+            label=f"📥 Download Product Category Performance as Excel",
+            data=to_excel(category_display, 'Product Category Performance'),
+            file_name="product_category_performance_june.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # Chart for the grouped categories
+        category_summary_for_chart = category_summary.copy()
+        category_summary_for_chart = category_summary_for_chart.sort_values(category_sort_column, ascending=sort_ascending)
+        
+        fig_category = px.bar(category_summary_for_chart, 
+                              x='Grouped Category', 
+                              y='Count Conv (%)', 
+                              title='📊 Product Category Count Conversion - June',
+                              template='plotly_white',
+                              color='Count Conv (%)',
+                              color_continuous_scale='Plasma',
+                              text='Count Conv (%)')
+        
+        fig_category.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
+        fig_category.update_layout(
+            plot_bgcolor='rgba(255,255,255,1)',
+            paper_bgcolor='rgba(255,255,255,1)',
+            font=dict(family="Inter, sans-serif", size=12, color="#1e293b"),
+            xaxis=dict(showgrid=False, tickangle=45, title_font=dict(size=14, color="#1e293b")),
+            yaxis=dict(showgrid=True, gridcolor='#e2e8f0', title_font=dict(size=14, color="#1e293b")),
+            title_font=dict(size=18, color="#1e293b", family="Inter"),
+            height=550,
+            margin=dict(t=80, b=80, l=60, r=60)
+        )
+        st.plotly_chart(fig_category, use_container_width=True)
+    else:
+        st.warning("⚠️ No category data available with current filters.")
+
+    # Item Category Performance (Full Product Breakdown)
+    st.markdown('<h3 class="subheader">📋 Item Category Performance - Full Product Breakdown</h3>', unsafe_allow_html=True)
+
+    # Full item category performance without grouping
+    item_category_summary = filtered_df.groupby('Item Category').agg({
+        'TotalSoldPrice': 'sum',
+        'WarrantyPrice': 'sum',
+        'TotalCount': 'sum',
+        'WarrantyCount': 'sum'
+    }).reset_index()
+
+    item_category_summary['Count Conv (%)'] = (item_category_summary['WarrantyCount'] / item_category_summary['TotalCount'] * 100).round(2)
+    item_category_summary['Value Conv (%)'] = (item_category_summary['WarrantyPrice'] / item_category_summary['TotalSoldPrice'] * 100).round(2)
+    item_category_summary['AHSP'] = (item_category_summary['WarrantyPrice'] / item_category_summary['WarrantyCount']).where(item_category_summary['WarrantyCount'] > 0, 0).round(2)
+
+    item_category_summary['Count Conv (%)'] = item_category_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+    item_category_summary['Value Conv (%)'] = item_category_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+
+    if not item_category_summary.empty:
+        item_category_display = item_category_summary[['Item Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
+        item_category_display.columns = ['Item Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+        
+        # Apply sorting to item category performance table
+        item_category_sort_column_mapping = {
+            "Count Conv (%)": "Count Conv (%)",
+            "Value Conv (%)": "Value Conv (%)", 
+            "AHSP (₹)": "AHSP (₹)",
+            "Warranty Sales (₹)": "Warranty Sales (₹)",
+            "Warranty Units": "Warranty Units"
+        }
+        item_category_sort_column = item_category_sort_column_mapping.get(sort_by, "Count Conv (%)")
+        item_category_display = item_category_display.sort_values(item_category_sort_column, ascending=sort_ascending)
+
+        st.dataframe(item_category_display.style.format({
+            'Count Conv (%)': '{:.2f}%',
+            'Value Conv (%)': '{:.2f}%',
+            'AHSP (₹)': '₹{:.2f}',
+            'Warranty Sales (₹)': '₹{:.0f}',
+            'Warranty Units': '{:.0f}'
+        }), use_container_width=True)
+
+        st.download_button(
+            label="📥 Download Item Category Performance as Excel",
+            data=to_excel(item_category_display, 'Item Category Performance'),
+            file_name="item_category_performance_june.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("ℹ️ No item category data available with current filters.")
+
+    # Insights Section
+    st.markdown('<h3 class="subheader">💡 Performance Insights & Key Takeaways</h3>', unsafe_allow_html=True)
+    
+    if not store_summary.empty:
+        top_store = store_summary.loc[store_summary['Count Conv (%)'].idxmax()]
+        bottom_store = store_summary.loc[store_summary['Count Conv (%)'].idxmin()]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.success(f"🏆 **Top Performing Store**: {top_store['Store']} with **{top_store['Count Conv (%)']:.2f}%** count conversion")
+        
+        with col2:
+            st.warning(f"📉 **Store Needing Improvement**: {bottom_store['Store']} with **{bottom_store['Count Conv (%)']:.2f}%** count conversion")
+    
+    if not rbm_summary.empty:
+        top_rbm = rbm_summary.loc[rbm_summary['Count Conv (%)'].idxmax()]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.info(f"👑 **Top Performing RBM**: {top_rbm['RBM']} with **{top_rbm['Count Conv (%)']:.2f}%** count conversion")
+        
+        with col2:
+            st.info(f"💰 **Overall AHSP**: **₹{june_ahsp:,.2f}**")
+
 else:
-    st.warning(f"No {category_column.lower()} data available with current filters.")
-
-# Insights
-st.markdown('<h2 class="subheader">💡 Insights & Recommendations</h2>', unsafe_allow_html=True)
-
-TARGET_COUNT_CONVERSION = 15.0
-TARGET_VALUE_CONVERSION = 2.0
-TARGET_AHSP = 1000.0
-
-with st.expander("Performance Against Targets", expanded=True):
-    if june_count_conversion >= TARGET_COUNT_CONVERSION:
-        st.success(f"June Count Conversion ({june_count_conversion:.2f}%) meets or exceeds target ({TARGET_COUNT_CONVERSION}%).")
-    else:
-        st.warning(f"June Count Conversion ({june_count_conversion:.2f}%) is below target ({TARGET_COUNT_CONVERSION}%). Gap: {TARGET_COUNT_CONVERSION - june_count_conversion:.2f}%.")
-    
-    if june_value_conversion >= TARGET_VALUE_CONVERSION:
-        st.success(f"June Value Conversion ({june_value_conversion:.2f}%) meets or exceeds target ({TARGET_VALUE_CONVERSION}%).")
-    else:
-        st.warning(f"June Value Conversion ({june_value_conversion:.2f}%) is below target ({TARGET_VALUE_CONVERSION}%). Gap: {TARGET_VALUE_CONVERSION - june_value_conversion:.2f}%.")
-    
-    if june_ahsp >= TARGET_AHSP:
-        st.success(f"June AHSP (₹{june_ahsp:,.2f}) meets or exceeds target (₹{TARGET_AHSP:,.2f}).")
-    else:
-        st.warning(f"June AHSP (₹{june_ahsp:,.2f}) is below target (₹{TARGET_AHSP:,.2f}). Gap: ₹{TARGET_AHSP - june_ahsp:,.2f}.")
-
-# Store-Level Warranty Sales Analysis
-with st.expander("Store-Level Warranty Sales Analysis", expanded=True):
-    store_warranty = filtered_df.groupby('Store')['WarrantyPrice'].sum().reset_index().sort_values('WarrantyPrice', ascending=False)
-    
-    if not store_warranty.empty:
-        st.write("Warranty sales for each store in June:")
-        st.dataframe(store_warranty.style.format({
-            'WarrantyPrice': '₹{:.0f}'
-        }).set_properties(**{'text-align': 'center'}), use_container_width=True)
-
-        st.write("**Stores with Low Warranty Sales:**")
-        low_sales_stores = store_warranty[store_warranty['WarrantyPrice'] < store_warranty['WarrantyPrice'].quantile(0.25)]
-        if not low_sales_stores.empty:
-            for _, row in low_sales_stores.iterrows():
-                store = row['Store']
-                warranty_sales = row['WarrantyPrice']
-                st.write(f"**{store} (Warranty Sales: ₹{warranty_sales:,.0f}):**")
-                
-                store_data = filtered_df[filtered_df['Store'] == store]
-                category_warranty = store_data.groupby(category_column)['WarrantyPrice'].sum().reset_index()
-                low_categories = category_warranty[category_warranty['WarrantyPrice'] < category_warranty['WarrantyPrice'].quantile(0.5)]
-                
-                reasons = []
-                if not low_categories.empty:
-                    for _, cat_row in low_categories.iterrows():
-                        reasons.append(f"{cat_row[category_column]} warranty sales: ₹{cat_row['WarrantyPrice']:,.0f}.")
-                
-                store_metrics = store_data.agg({
-                    'TotalSoldPrice': 'sum',
-                    'WarrantyCount': 'sum',
-                    'TotalCount': 'sum',
-                    'AHSP': 'mean'
-                })
-                if store_metrics['WarrantyCount'] < store_data['TotalCount'].sum() * 0.1:
-                    reasons.append(f"Low warranty units sold ({store_metrics['WarrantyCount']:.0f} vs. total {store_metrics['TotalCount']:.0f}).")
-                if store_metrics['AHSP'] < TARGET_AHSP:
-                    reasons.append(f"Low average warranty selling price (₹{store_metrics['AHSP']:,.2f}).")
-                
-                if reasons:
-                    for reason in reasons:
-                        st.write(f"- {reason}")
-                    st.write("**Recommendations:**")
-                    st.write("- Review sales strategies for underperforming product categories.")
-                    st.write("- Enhance staff training on warranty benefits.")
-                    st.write("- Introduce targeted promotions for warranty products.")
-                else:
-                    st.write("- No specific reasons identified; further analysis needed.")
-        else:
-            st.info("No stores with significantly low warranty sales.")
-    else:
-        st.info("No warranty sales data available for stores with current filters.")
-
-# Improvement Opportunities
-with st.expander("Improvement Opportunities", expanded=True):
-    low_count_performers = store_summary[store_summary['Conversion% (Count)'] < TARGET_COUNT_CONVERSION]
-    low_value_performers = store_summary[store_summary['Conversion% (Price)'] < TARGET_VALUE_CONVERSION]
-    low_ahsp_performers = store_summary[store_summary['AHSP'] < TARGET_AHSP]
-    
-    if not low_count_performers.empty:
-        st.write(f"These stores have below-target count conversion (target: {TARGET_COUNT_CONVERSION}%):")
-        for _, row in low_count_performers.iterrows():
-            st.write(f"- {row['Store']}: {row['Conversion% (Count)']:.2f}%")
-    else:
-        st.success(f"All stores meet or exceed the count conversion target ({TARGET_COUNT_CONVERSION}%) in June.")
-
-    if not low_value_performers.empty:
-        st.write(f"These stores have below-target value conversion (target: {TARGET_VALUE_CONVERSION}%):")
-        for _, row in low_value_performers.iterrows():
-            st.write(f"- {row['Store']}: {row['Conversion% (Price)']:.2f}%")
-    else:
-        st.success(f"All stores meet or exceed the value conversion target ({TARGET_VALUE_CONVERSION}%) in June.")
-
-    if not low_ahsp_performers.empty:
-        st.write(f"These stores have below-target AHSP (target: ₹{TARGET_AHSP:,.2f}):")
-        for _, row in low_ahsp_performers.iterrows():
-            st.write(f"- {row['Store']}: ₹{row['AHSP']:,.2f}")
-    else:
-        st.success(f"All stores meet or exceed the AHSP target (₹{TARGET_AHSP:,.2f}) in June.")
-
-    if not low_count_performers.empty or not low_value_performers.empty or not low_ahsp_performers.empty:
-        st.write("**Recommendations:**")
-        st.write("1. Provide additional training on warranty benefits to improve conversion rates.")
-        st.write("2. Create targeted promotions for high-value warranty products.")
-        st.write("3. Review staffing and sales strategies in underperforming stores.")
-        st.write("4. Implement incentives for selling higher-value warranty packages.")
-    else:
-        st.write("**Recommendations:**")
-        st.write("1. Maintain current strategies to sustain performance.")
-        st.write("2. Explore opportunities to exceed targets through innovative promotions.")
-
-# FUTURE Stores Analysis
-if future_filter or any('FUTURE' in store for store in filtered_df['Store'].unique()):
-    with st.expander("FUTURE Stores Analysis", expanded=True):
-        future_stores = filtered_df[filtered_df['Store'].str.contains('FUTURE', case=True)]
-        if not future_stores.empty:
-            future_summary = future_stores.agg({
-                'TotalSoldPrice': 'sum',
-                'WarrantyPrice': 'sum',
-                'TotalCount': 'sum',
-                'WarrantyCount': 'sum',
-                'AHSP': 'mean'
-            })
-            future_count_conversion = (future_summary['WarrantyCount'] / future_summary['TotalCount'] * 100) if future_summary['TotalCount'] > 0 else 0
-            future_value_conversion = (future_summary['WarrantyPrice'] / future_summary['TotalSoldPrice'] * 100) if future_summary['TotalSoldPrice'] > 0 else 0
-            future_ahsp = future_summary['AHSP']
-            
-            st.write(f"Average count conversion in FUTURE stores: {future_count_conversion:.2f}%")
-            st.write(f"Average value conversion in FUTURE stores: {future_value_conversion:.2f}%")
-            st.write(f"Average AHSP in FUTURE stores: ₹{future_ahsp:,.2f}")
-            
-            if future_count_conversion < TARGET_COUNT_CONVERSION or future_value_conversion < TARGET_VALUE_CONVERSION or future_ahsp < TARGET_AHSP:
-                st.warning("FUTURE stores are below target in June.")
-                st.write("**Recommendations:**")
-                st.write("- Conduct store-specific training to boost conversion rates.")
-                st.write("- Analyze customer demographics for targeted promotions.")
-                st.write("- Review warranty pricing strategy to improve AHSP.")
-            else:
-                st.success("FUTURE stores meet or exceed targets in June!")
-        else:
-            st.info("No FUTURE stores in current selection")
-
-# Replacement Warranty Categories Analysis
-if replacement_filter:
-    with st.expander("Replacement Warranty Categories Deep Dive", expanded=True):
-        st.markdown('<h3 class="subheader">🔄 Replacement Warranty Category Performance</h3>', unsafe_allow_html=True)
-        
-        replacement_sales = filtered_df.groupby('Replacement Category').agg({
-            'TotalSoldPrice': 'sum',
-            'WarrantyPrice': 'sum',
-            'TotalCount': 'sum',
-            'WarrantyCount': 'sum'
-        }).reset_index()
-        
-        replacement_sales['Conversion% (Count)'] = (replacement_sales['WarrantyCount'] / replacement_sales['TotalCount'] * 100).round(2)
-        replacement_sales['Conversion% (Price)'] = (replacement_sales['WarrantyPrice'] / replacement_sales['TotalSoldPrice'] * 100).round(2)
-        replacement_sales['AHSP'] = (replacement_sales['WarrantyPrice'] / replacement_sales['WarrantyCount']).where(replacement_sales['WarrantyCount'] > 0, 0).round(2)
-        
-        display_df = replacement_sales[['Replacement Category', 'WarrantyPrice', 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP']]
-        display_df.columns = ['Replacement Category', 'Warranty Sales (₹)', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)']
-        
-        st.dataframe(display_df.style.format({
-            'Warranty Sales (₹)': '₹{:.0f}',
-            'Count Conv (%)': '{:.2f}%',
-            'Value Conv (%)': '{:.2f}%',
-            'AHSP (₹)': '₹{:.2f}'
-        }), use_container_width=True)
-        
-        fig_replacement = px.bar(replacement_sales, 
-                                x='Replacement Category', 
-                                y='Conversion% (Count)', 
-                                title='Replacement Category Count Conversion - June',
-                                template='plotly_white',
-                                color_discrete_sequence=['#3730a3'])
-        fig_replacement.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
-            xaxis=dict(showgrid=False, tickangle=45),
-            yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
-        )
-        st.plotly_chart(fig_replacement, use_container_width=True)
-
-# Speaker Categories Analysis
-if speaker_filter:
-    with st.expander("Speaker Categories Deep Dive", expanded=True):
-        st.markdown('<h3 class="subheader">🔊 Speaker Category Performance</h3>', unsafe_allow_html=True)
-        
-        speaker_categories = ['SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE']
-        speaker_sales = filtered_df[filtered_df['Item Category'].isin(speaker_categories)].groupby('Item Category').agg({
-            'TotalSoldPrice': 'sum',
-            'WarrantyPrice': 'sum',
-            'TotalCount': 'sum',
-            'WarrantyCount': 'sum'
-        }).reset_index()
-        
-        speaker_sales['Conversion% (Count)'] = (speaker_sales['WarrantyCount'] / speaker_sales['TotalCount'] * 100).round(2)
-        speaker_sales['Conversion% (Price)'] = (speaker_sales['WarrantyPrice'] / speaker_sales['TotalSoldPrice'] * 100).round(2)
-        speaker_sales['AHSP'] = (speaker_sales['WarrantyPrice'] / speaker_sales['WarrantyCount']).where(speaker_sales['WarrantyCount'] > 0, 0).round(2)
-        
-        display_df = speaker_sales[['Item Category', 'WarrantyPrice', 'Conversion% (Count)', 'Conversion% (Price)', 'AHSP']]
-        display_df.columns = ['Speaker Category', 'Warranty Sales (₹)', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)']
-        
-        st.dataframe(display_df.style.format({
-            'Warranty Sales (₹)': '₹{:.0f}',
-            'Count Conv (%)': '{:.2f}%',
-            'Value Conv (%)': '{:.2f}%',
-            'AHSP (₹)': '₹{:.2f}'
-        }), use_container_width=True)
-        
-        fig_speaker = px.bar(speaker_sales, 
-                             x='Item Category', 
-                             y='Conversion% (Count)', 
-                             title='Speaker Category Count Conversion - June',
-                             template='plotly_white',
-                             color_discrete_sequence=['#3730a3'])
-        fig_speaker.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937"),
-            xaxis=dict(showgrid=False, tickangle=45),
-            yaxis=dict(showgrid=True, gridcolor='#e5e7eb')
-        )
-        st.plotly_chart(fig_speaker, use_container_width=True)
-
-# Correlation Analysis
-st.markdown('<h3 class="subheader">🔗 Correlation Analysis</h3>', unsafe_allow_html=True)
-corr_matrix = filtered_df[['TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount', 'AHSP']].corr()
-fig_corr = px.imshow(
-    corr_matrix,
-    text_auto=True,
-    title="Correlation Matrix of Key Metrics - June",
-    template='plotly_white',
-    color_continuous_scale='Blues',
-    zmin=-1,
-    zmax=1
-)
-fig_corr.update_layout(
-    plot_bgcolor='rgba(0,0,0,0)',
-    paper_bgcolor='rgba(0,0,0,0)',
-    font=dict(family="Poppins, Inter, sans-serif", size=12, color="#1f2937")
-)
-st.plotly_chart(fig_corr, use_container_width=True)
+    st.warning("⚠️ Please upload data to use the dashboard.")
