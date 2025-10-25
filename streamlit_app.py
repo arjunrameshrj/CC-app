@@ -2,12 +2,38 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import os
-import hashlib
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from io import BytesIO
 
 # Streamlit page configuration
 st.set_page_config(page_title="Warranty Conversion Dashboard", layout="wide", initial_sidebar_state="expanded")
+
+# --- Google Sheets Integration Configuration ---
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzsJHiGsazbEncutdZme4z7GdFKB517lmNU1QcDxA-32ZVyKtO9zaXUv5yMCNJgxQlH/exec"  # Replace with your Apps Script web app URL
+
+# Configure requests with retry logic
+session = requests.Session()
+retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
+session.mount('https://', HTTPAdapter(max_retries=retries))
+
+# Function to fetch data from Google Sheets
+@st.cache_data(ttl=60)  # Cache for 60 seconds
+def fetch_data_from_sheets():
+    try:
+        response = session.get(APPS_SCRIPT_URL, params={"action": "read"}, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("status") == "success" and data.get("data"):
+            df = pd.DataFrame(data["data"])
+            return df
+        else:
+            st.error(f"Error fetching data from Google Sheets: {data.get('message', 'No data returned or invalid response')}")
+            return None
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to connect to Google Sheets: {str(e)}")
+        return None
 
 # Enhanced CSS for modern, attractive styling
 st.markdown("""
@@ -442,59 +468,24 @@ def to_excel(df, sheet_name='Data'):
     processed_data = output.getvalue()
     return processed_data
 
-# Create data directory if it doesn't exist
-DATA_DIR = "data"
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR)
-
-JUNE_FILE_PATH = os.path.join(DATA_DIR, "june_data.csv")
-USER_CREDENTIALS_FILE = os.path.join(DATA_DIR, "user_credentials.txt")
-
-# Function to hash passwords
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-# Initialize user credentials
-def initialize_credentials():
-    if not os.path.exists(USER_CREDENTIALS_FILE):
-        with open(USER_CREDENTIALS_FILE, 'w') as f:
-            f.write(f"admin:{hash_password('admin123')}\n")
-
-initialize_credentials()
-
-# Load credentials
-def load_credentials():
-    credentials = {}
-    if os.path.exists(USER_CREDENTIALS_FILE):
-        with open(USER_CREDENTIALS_FILE, 'r') as f:
-            for line in f:
-                username, hashed_pwd = line.strip().split(':')
-                credentials[username] = hashed_pwd
-    return credentials
-
-# Authentication function
-def authenticate(username, password):
-    credentials = load_credentials()
-    return username in credentials and credentials[username] == hash_password(password)
-
 # Function to map item categories to replacement warranty categories
 def map_to_replacement_category(item_category):
     fan_categories = ['CEILING FAN', 'PEDESTAL FAN', 'RECHARGABLE FAN', 'TABLE FAN', 'TOWER FAN', 'WALL FAN']
     steamer_categories = ['GARMENTS STEAMER', 'STEAMER']
     
-    if any(fan in item_category.upper() for fan in fan_categories):
+    if any(fan in str(item_category).upper() for fan in fan_categories):
         return 'FAN'
-    elif 'MIXER GRINDER' in item_category.upper():
+    elif 'MIXER GRINDER' in str(item_category).upper():
         return 'MIXER GRINDER'
-    elif 'IRON BOX' in item_category.upper():
+    elif 'IRON BOX' in str(item_category).upper():
         return 'IRON BOX'
-    elif 'ELECTRIC KETTLE' in item_category.upper():
+    elif 'ELECTRIC KETTLE' in str(item_category).upper():
         return 'ELECTRIC KETTLE'
-    elif 'OTG' in item_category.upper():
+    elif 'OTG' in str(item_category).upper():
         return 'OTG'
-    elif any(steamer in item_category.upper() for steamer in steamer_categories):
+    elif any(steamer in str(item_category).upper() for steamer in steamer_categories):
         return 'STEAMER'
-    elif 'INDUCTION' in item_category.upper():
+    elif 'INDUCTION' in str(item_category).upper():
         return 'INDUCTION COOKER'
     else:
         return item_category
@@ -502,23 +493,17 @@ def map_to_replacement_category(item_category):
 # Function to check if category is small appliance
 def is_small_appliance(item_category):
     major_appliances = ['AC', 'TV', 'WASHING MACHINE', 'REFRIGERATOR', 'MICROWAVE OVEN', 'DISH WASHER', 'DRYER']
-    return not any(appliance in item_category.upper() for appliance in major_appliances)
+    return not any(appliance in str(item_category).upper() for appliance in major_appliances)
 
 # Function to get appliance type
 def get_appliance_type(item_category):
     major_appliances = ['AC', 'TV', 'WASHING MACHINE', 'REFRIGERATOR', 'MICROWAVE OVEN', 'DISH WASHER', 'DRYER']
-    if any(appliance in item_category.upper() for appliance in major_appliances):
+    if any(appliance in str(item_category).upper() for appliance in major_appliances):
         return 'Large Appliance'
     else:
         return 'Small Appliance'
 
 # Session state initialization
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'show_upload_form' not in st.session_state:
-    st.session_state.show_upload_form = False
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = "non-admin"
 if 'data_loaded' not in st.session_state:
     st.session_state.data_loaded = False
 if 'current_df' not in st.session_state:
@@ -531,18 +516,15 @@ st.markdown('<div class="main-header">📊 Warranty Conversion Analysis Dashboar
 required_columns = ['Item Category', 'BDM', 'RBM', 'Store', 'Staff Name', 'TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
 
 @st.cache_data
-def load_data(file, file_path=None):
+def load_data():
     try:
-        if isinstance(file, str):
-            df = pd.read_csv(file)
-        elif file.name.endswith('.csv'):
-            df = pd.read_csv(file)
-        else:
-            df = pd.read_excel(file, engine='openpyxl')
+        df = fetch_data_from_sheets()
+        if df is None:
+            return None
         
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
-            st.error(f"Missing columns in June file: {', '.join(missing_columns)}")
+            st.error(f"Missing columns in Google Sheets data: {', '.join(missing_columns)}")
             return None
         
         numeric_cols = ['TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
@@ -550,7 +532,7 @@ def load_data(file, file_path=None):
             df[col] = pd.to_numeric(df[col], errors='coerce')
         
         if df[numeric_cols].isna().any().any():
-            st.warning("Missing or invalid values in numeric columns for June. Filling with 0.")
+            st.warning("Missing or invalid values in numeric columns. Filling with 0.")
             df[numeric_cols] = df[numeric_cols].fillna(0)
         
         df['Replacement Category'] = df['Item Category'].apply(map_to_replacement_category)
@@ -561,96 +543,29 @@ def load_data(file, file_path=None):
         df['AHSP'] = (df['WarrantyPrice'] / df['WarrantyCount']).where(df['WarrantyCount'] > 0, 0).round(2)
         df['Month'] = 'June'
         
-        if file_path and not isinstance(file, str):
-            if file.name.endswith('.csv'):
-                with open(file_path, 'wb') as f:
-                    f.write(file.getvalue())
-            else:
-                df.to_csv(file_path, index=False)
-            st.success("✅ June data saved successfully and available to all users.")
-        
         return df
     except Exception as e:
-        st.error(f"❌ Error loading June file: {str(e)}")
+        st.error(f"❌ Error loading data from Google Sheets: {str(e)}")
         return None
 
-# Load saved data or handle new upload
-df = None
+# Load data from Google Sheets
+if st.session_state.current_df is None:
+    df = load_data()
+    if df is not None:
+        st.session_state.current_df = df
+        st.session_state.data_loaded = True
 
 # Sidebar content
 with st.sidebar:
     st.markdown('<h2 style="color: #1e293b; font-weight: 700; margin-bottom: 20px;">🔍 Dashboard Controls</h2>', unsafe_allow_html=True)
     st.markdown('<hr>', unsafe_allow_html=True)
     
-    # File upload form
-    st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin-top: 20px;">📁 Upload June Data</h3>', unsafe_allow_html=True)
-    with st.form("upload_form"):
-        june_file = st.file_uploader("June Data", type=["csv", "xlsx", "xls"], key="june")
-        upload_password = st.text_input("Upload Password", type="password", placeholder="Enter password to upload")
-        submit_upload = st.form_submit_button("🚀 Upload", type="primary")
-        if submit_upload:
-            if authenticate("admin", upload_password):
-                if june_file:
-                    df = load_data(june_file, JUNE_FILE_PATH)
-                    if df is not None:
-                        st.session_state.current_df = df
-                        st.session_state.data_loaded = True
-                        st.rerun()
-                else:
-                    st.warning("⚠️ Please select a file to upload.")
-            else:
-                st.error("❌ Invalid password. Upload failed.")
-
-    # Admin login
-    st.markdown('<hr>', unsafe_allow_html=True)
-    if st.session_state.user_role == "admin" and st.session_state.authenticated:
-        st.button("🚪 Logout", on_click=lambda: st.session_state.update(authenticated=False, show_upload_form=False, user_role="non-admin"))
-    else:
-        st.button("🔐 Admin Login", on_click=lambda: st.session_state.update(show_upload_form=True))
-        if st.session_state.show_upload_form and not st.session_state.authenticated:
-            with st.form("login_form"):
-                st.markdown('<h3 style="color: #1e293b; font-weight: 600;">🔐 Admin Login</h3>', unsafe_allow_html=True)
-                username = st.text_input("Username", placeholder="Enter your username")
-                password = st.text_input("Password", type="password", placeholder="Enter your password")
-                submit_login = st.form_submit_button("✓ Login", type="primary")
-                if submit_login:
-                    if authenticate(username, password):
-                        st.session_state.authenticated = True
-                        st.session_state.user_role = "admin"
-                        st.success("✅ Logged in successfully!")
-                    else:
-                        st.error("❌ Invalid username or password.")
-
-# Load saved data if no new upload
-if st.session_state.current_df is None:
-    if os.path.exists(JUNE_FILE_PATH):
-        df = load_data(JUNE_FILE_PATH)
-        if df is not None:
-            st.session_state.current_df = df
-            st.session_state.data_loaded = True
-
-# If no uploaded or saved files, use sample data
-if st.session_state.current_df is None:
-    data = {
-        'Item Category': ['CEILING FAN', 'PEDESTAL FAN', 'MIXER GRINDER', 'IRON BOX', 'ELECTRIC KETTLE', 'OTG', 'GARMENTS STEAMER', 'INDUCTION COOKER', 'SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE', 'DISH WASHER', 'MICROWAVE OVEN', 'WASHING MACHINE'],
-        'BDM': ['BDM1'] * 15,
-        'RBM': ['RENJITH'] * 15,
-        'Store': ['Kannur FUTURE', 'Store C', 'Store D'] * 5,
-        'Staff Name': ['Staff1', 'Staff2', 'Staff3'] * 5,
-        'TotalSoldPrice': [48239177/15] * 15,
-        'WarrantyPrice': [300619/15] * 15,
-        'TotalCount': [5286/15] * 15,
-        'WarrantyCount': [483/15] * 15,
-        'Month': ['June'] * 15
-    }
-    df = pd.DataFrame(data)
-    df['Replacement Category'] = df['Item Category'].apply(map_to_replacement_category)
-    df['Appliance Type'] = df['Item Category'].apply(get_appliance_type)
-    df['Conversion% (Count)'] = (df['WarrantyCount'] / df['TotalCount'] * 100).round(2)
-    df['Conversion% (Price)'] = (df['WarrantyPrice'] / df['TotalSoldPrice'] * 100).round(2)
-    df['AHSP'] = (df['WarrantyPrice'] / df['WarrantyCount']).where(df['WarrantyPrice'] > 0, 0).round(2)
-    st.session_state.current_df = df
-    st.session_state.data_loaded = True
+    # Refresh Button
+    if st.button("🔄 Refresh Data"):
+        st.cache_data.clear()
+        st.session_state.current_df = None
+        st.session_state.data_loaded = False
+        st.rerun()
 
 # Now that we have data, set up the filters in sidebar
 if st.session_state.data_loaded and st.session_state.current_df is not None:
@@ -1058,7 +973,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         }), use_container_width=True)
 
         st.download_button(
-            label=f"📥 Download Product Category Performance as Excel",
+            label="📥 Download Product Category Performance as Excel",
             data=to_excel(category_display, 'Product Category Performance'),
             file_name="product_category_performance_june.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1169,4 +1084,4 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
             st.info(f"💰 **Overall AHSP**: **₹{june_ahsp:,.2f}**")
 
 else:
-    st.warning("⚠️ Please upload data to use the dashboard.")
+    st.error("❌ Failed to load data from Google Sheets. Please check the Apps Script URL, Spreadsheet ID, or network connection.")
