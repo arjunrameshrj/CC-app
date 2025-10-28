@@ -11,28 +11,45 @@ from io import BytesIO
 st.set_page_config(page_title="Warranty Conversion Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # --- Google Sheets Integration Configuration ---
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzsJHiGsazbEncutdZme4z7GdFKB517lmNU1QcDxA-32ZVyKtO9zaXUv5yMCNJgxQlH/exec"  # Replace with your Apps Script web app URL
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwx04lOl9zasbQUwCDeGVOR_kqzFJzfyvY1kS4oiYcjSHmHD1_b6Z3LWNSI9J1QRuws/exec"  # Replace with your Apps Script web app URL
 
 # Configure requests with retry logic
 session = requests.Session()
 retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
 session.mount('https://', HTTPAdapter(max_retries=retries))
 
-# Function to fetch data from Google Sheets
+# Available sheets
+SHEETS = [
+    "2024 December",
+    "2025 JAN",
+    "2025 FEB",
+    "2025 MARCH",
+    "2025 April",
+    "2025 MAY",
+    "2025 JUN",
+    "2025 JULY",
+    "2025 AUG",
+    "2025 SEP"
+]
+
+# In sidebar
+selected_sheet = st.selectbox("Select Month", SHEETS, index=0)
+
+# Function to fetch data from Google Sheets for a specific sheet
 @st.cache_data(ttl=60)  # Cache for 60 seconds
-def fetch_data_from_sheets():
+def fetch_data_from_sheets(sheet_name):
     try:
-        response = session.get(APPS_SCRIPT_URL, params={"action": "read"}, timeout=30)
+        response = session.get(APPS_SCRIPT_URL, params={"action": "read", "sheet": sheet_name}, timeout=30)
         response.raise_for_status()
         data = response.json()
         if data.get("status") == "success" and data.get("data"):
             df = pd.DataFrame(data["data"])
             return df
         else:
-            st.error(f"Error fetching data from Google Sheets: {data.get('message', 'No data returned or invalid response')}")
+            st.error(f"Error fetching data from Google Sheets for {sheet_name}: {data.get('message', 'No data returned or invalid response')}")
             return None
     except requests.exceptions.RequestException as e:
-        st.error(f"Failed to connect to Google Sheets: {str(e)}")
+        st.error(f"Failed to connect to Google Sheets for {sheet_name}: {str(e)}")
         return None
 
 # Enhanced CSS for modern, attractive styling
@@ -508,23 +525,47 @@ if 'data_loaded' not in st.session_state:
     st.session_state.data_loaded = False
 if 'current_df' not in st.session_state:
     st.session_state.current_df = None
+if 'selected_sheet' not in st.session_state:
+    st.session_state.selected_sheet = SHEETS[0]  # Default to first sheet
+
+# Sidebar content
+with st.sidebar:
+    st.markdown('<h2 style="color: #1e293b; font-weight: 700; margin-bottom: 20px;">🔍 Dashboard Controls</h2>', unsafe_allow_html=True)
+    st.markdown('<hr>', unsafe_allow_html=True)
+    
+    # Month selection dropdown
+    selected_sheet = st.selectbox("📅 Select Month", SHEETS, index=SHEETS.index(st.session_state.selected_sheet))
+    
+    # Update session state if month changes
+    if selected_sheet != st.session_state.selected_sheet:
+        st.session_state.selected_sheet = selected_sheet
+        st.session_state.current_df = None
+        st.session_state.data_loaded = False
+        st.cache_data.clear()
+    
+    # Refresh Button
+    if st.button("🔄 Refresh Data"):
+        st.cache_data.clear()
+        st.session_state.current_df = None
+        st.session_state.data_loaded = False
+        st.rerun()
 
 # Main dashboard header
-st.markdown('<div class="main-header">📊 Warranty Conversion Analysis Dashboard - OCT</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="main-header">📊 Warranty Conversion Analysis Dashboard - {st.session_state.selected_sheet}</div>', unsafe_allow_html=True)
 
 # Load data function
 required_columns = ['Item Category', 'BDM', 'RBM', 'Store', 'Staff Name', 'TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
 
 @st.cache_data
-def load_data():
+def load_data(sheet_name):
     try:
-        df = fetch_data_from_sheets()
+        df = fetch_data_from_sheets(sheet_name)
         if df is None:
             return None
         
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
-            st.error(f"Missing columns in Google Sheets data: {', '.join(missing_columns)}")
+            st.error(f"Missing columns in Google Sheets data for {sheet_name}: {', '.join(missing_columns)}")
             return None
         
         numeric_cols = ['TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
@@ -532,7 +573,7 @@ def load_data():
             df[col] = pd.to_numeric(df[col], errors='coerce')
         
         if df[numeric_cols].isna().any().any():
-            st.warning("Missing or invalid values in numeric columns. Filling with 0.")
+            st.warning(f"Missing or invalid values in numeric columns for {sheet_name}. Filling with 0.")
             df[numeric_cols] = df[numeric_cols].fillna(0)
         
         df['Replacement Category'] = df['Item Category'].apply(map_to_replacement_category)
@@ -541,31 +582,19 @@ def load_data():
         df['Conversion% (Count)'] = (df['WarrantyCount'] / df['TotalCount'] * 100).round(2)
         df['Conversion% (Price)'] = (df['WarrantyPrice'] / df['TotalSoldPrice'] * 100).where(df['TotalSoldPrice'] > 0, 0).round(2)
         df['AHSP'] = (df['WarrantyPrice'] / df['WarrantyCount']).where(df['WarrantyCount'] > 0, 0).round(2)
-        df['Month'] = 'June'
+        df['Month'] = sheet_name
         
         return df
     except Exception as e:
-        st.error(f"❌ Error loading data from Google Sheets: {str(e)}")
+        st.error(f"❌ Error loading data from Google Sheets for {sheet_name}: {str(e)}")
         return None
 
 # Load data from Google Sheets
 if st.session_state.current_df is None:
-    df = load_data()
+    df = load_data(st.session_state.selected_sheet)
     if df is not None:
         st.session_state.current_df = df
         st.session_state.data_loaded = True
-
-# Sidebar content
-with st.sidebar:
-    st.markdown('<h2 style="color: #1e293b; font-weight: 700; margin-bottom: 20px;">🔍 Dashboard Controls</h2>', unsafe_allow_html=True)
-    st.markdown('<hr>', unsafe_allow_html=True)
-    
-    # Refresh Button
-    if st.button("🔄 Refresh Data"):
-        st.cache_data.clear()
-        st.session_state.current_df = None
-        st.session_state.data_loaded = False
-        st.rerun()
 
 # Now that we have data, set up the filters in sidebar
 if st.session_state.data_loaded and st.session_state.current_df is not None:
@@ -661,31 +690,31 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         st.stop()
 
     # Main dashboard
-    st.markdown('<h2 class="subheader">📈 OCT Performance Overview</h2>', unsafe_allow_html=True)
+    st.markdown(f'<h2 class="subheader">📈 {st.session_state.selected_sheet} Performance Overview</h2>', unsafe_allow_html=True)
 
     # KPI metrics
     st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin: 25px 0 15px 0;">🎯 Key Performance Indicators</h3>', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)
 
-    june_total_warranty = filtered_df['WarrantyPrice'].sum()
-    june_total_units = filtered_df['TotalCount'].sum()
-    june_total_warranty_units = filtered_df['WarrantyCount'].sum()
-    june_total_sales = filtered_df['TotalSoldPrice'].sum()
-    june_count_conversion = (june_total_warranty_units / june_total_units * 100) if june_total_units > 0 else 0
-    june_value_conversion = (june_total_warranty / june_total_sales * 100) if june_total_sales > 0 else 0
-    june_ahsp = (june_total_warranty / june_total_warranty_units) if june_total_warranty_units > 0 else 0
+    total_warranty = filtered_df['WarrantyPrice'].sum()
+    total_units = filtered_df['TotalCount'].sum()
+    total_warranty_units = filtered_df['WarrantyCount'].sum()
+    total_sales = filtered_df['TotalSoldPrice'].sum()
+    count_conversion = (total_warranty_units / total_units * 100) if total_units > 0 else 0
+    value_conversion = (total_warranty / total_sales * 100) if total_sales > 0 else 0
+    ahsp = (total_warranty / total_warranty_units) if total_warranty_units > 0 else 0
 
     with col1:
-        st.metric("💰 Warranty Sales", f"₹{june_total_warranty:,.0f}")
+        st.metric("💰 Warranty Sales", f"₹{total_warranty:,.0f}")
     with col2:
-        st.metric("📊 Count Conversion", f"{june_count_conversion:.2f}%")
+        st.metric("📊 Count Conversion", f"{count_conversion:.2f}%")
     with col3:
-        st.metric("📈 Value Conversion", f"{june_value_conversion:.2f}%")
+        st.metric("📈 Value Conversion", f"{value_conversion:.2f}%")
     with col4:
-        st.metric("💵 AHSP", f"₹{june_ahsp:,.2f}")
+        st.metric("💵 AHSP", f"₹{ahsp:,.2f}")
 
     # Store Performance
-    st.markdown('<h3 class="subheader">🏬 Store Performance Analysis</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 class="subheader">🏬 Store Performance Analysis - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
 
     store_summary = filtered_df.groupby('Store').agg({
         'TotalSoldPrice': 'sum',
@@ -707,7 +736,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
     total_sales = store_summary['TotalSoldPrice'].sum()
     total_warranty_sales = store_summary['WarrantyPrice'].sum()
     total_units = store_summary['TotalCount'].sum()
-    total_warranty_units = store_summary['WarrantyCount'].sum()
+    total_warranty_units = store_summary['TotalCount'].sum()
     
     total_count_conv = (total_warranty_units / total_units * 100) if total_units > 0 else 0
     total_value_conv = (total_warranty_sales / total_sales * 100) if total_sales > 0 else 0
@@ -763,7 +792,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
     st.download_button(
         label="📥 Download Store Performance as Excel",
         data=to_excel(final_store_display, 'Store Performance'),
-        file_name="store_performance_june.xlsx",
+        file_name=f"store_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
@@ -783,23 +812,23 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         
         if sort_by == "Value Conv (%)":
             chart_y_column = 'Value Conv (%)'
-            chart_title = '📊 Store Value Conversion - June'
+            chart_title = f'📊 Store Value Conversion - {st.session_state.selected_sheet}'
             chart_text = 'Value Conv (%)'
         elif sort_by == "AHSP (₹)":
             chart_y_column = 'AHSP'
-            chart_title = '💵 Store AHSP - June'
+            chart_title = f'💵 Store AHSP - {st.session_state.selected_sheet}'
             chart_text = 'AHSP'
         elif sort_by == "Warranty Sales (₹)":
             chart_y_column = 'WarrantyPrice'
-            chart_title = '💰 Store Warranty Sales - June'
+            chart_title = f'💰 Store Warranty Sales - {st.session_state.selected_sheet}'
             chart_text = 'WarrantyPrice'
         elif sort_by == "Warranty Units":
             chart_y_column = 'WarrantyCount'
-            chart_title = '📦 Store Warranty Units - June'
+            chart_title = f'📦 Store Warranty Units - {st.session_state.selected_sheet}'
             chart_text = 'WarrantyCount'
         else:
             chart_y_column = 'Count Conv (%)'
-            chart_title = '📊 Store Count Conversion - June'
+            chart_title = f'📊 Store Count Conversion - {st.session_state.selected_sheet}'
             chart_text = 'Count Conv (%)'
 
         fig_store = px.bar(store_summary_for_chart, 
@@ -833,7 +862,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         st.plotly_chart(fig_store, use_container_width=True)
 
     # Staff Performance Table
-    st.markdown('<h3 class="subheader">👨‍💼 Staff Performance Analysis</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 class="subheader">👨‍💼 Staff Performance Analysis - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
 
     staff_summary = filtered_df.groupby(['Staff Name', 'Store']).agg({
         'TotalSoldPrice': 'sum',
@@ -874,12 +903,12 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
     st.download_button(
         label="📥 Download Staff Performance as Excel",
         data=to_excel(staff_display, 'Staff Performance'),
-        file_name="staff_performance_june.xlsx",
+        file_name=f"staff_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
     # RBM Performance
-    st.markdown('<h3 class="subheader">👥 RBM Performance Analysis</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 class="subheader">👥 RBM Performance Analysis - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
 
     rbm_summary = filtered_df.groupby('RBM').agg({
         'TotalSoldPrice': 'sum',
@@ -920,12 +949,12 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
     st.download_button(
         label="📥 Download RBM Performance as Excel",
         data=to_excel(rbm_display, 'RBM Performance'),
-        file_name="rbm_performance_june.xlsx",
+        file_name=f"rbm_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
     # Product Category Performance with Small Appliance Grouping
-    st.markdown('<h3 class="subheader">📦 Product Category Performance</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 class="subheader">📦 Product Category Performance - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
 
     # Define major appliances that should stay as separate rows
     major_appliances = ['AC', 'TV', 'WASHING MACHINE', 'REFRIGERATOR', 'MICROWAVE OVEN', 'DISH WASHER', 'DRYER']
@@ -975,7 +1004,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         st.download_button(
             label="📥 Download Product Category Performance as Excel",
             data=to_excel(category_display, 'Product Category Performance'),
-            file_name="product_category_performance_june.xlsx",
+            file_name=f"product_category_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
@@ -986,7 +1015,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         fig_category = px.bar(category_summary_for_chart, 
                               x='Grouped Category', 
                               y='Count Conv (%)', 
-                              title='📊 Product Category Count Conversion - June',
+                              title=f'📊 Product Category Count Conversion - {st.session_state.selected_sheet}',
                               template='plotly_white',
                               color='Count Conv (%)',
                               color_continuous_scale='Plasma',
@@ -1008,7 +1037,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         st.warning("⚠️ No category data available with current filters.")
 
     # Item Category Performance (Full Product Breakdown)
-    st.markdown('<h3 class="subheader">📋 Item Category Performance - Full Product Breakdown</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 class="subheader">📋 Item Category Performance - Full Product Breakdown - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
 
     # Full item category performance without grouping
     item_category_summary = filtered_df.groupby('Item Category').agg({
@@ -1051,14 +1080,14 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         st.download_button(
             label="📥 Download Item Category Performance as Excel",
             data=to_excel(item_category_display, 'Item Category Performance'),
-            file_name="item_category_performance_june.xlsx",
+            file_name=f"item_category_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
         st.info("ℹ️ No item category data available with current filters.")
 
     # Insights Section
-    st.markdown('<h3 class="subheader">💡 Performance Insights & Key Takeaways</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 class="subheader">💡 Performance Insights & Key Takeaways - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
     
     if not store_summary.empty:
         top_store = store_summary.loc[store_summary['Count Conv (%)'].idxmax()]
@@ -1081,7 +1110,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
             st.info(f"👑 **Top Performing RBM**: {top_rbm['RBM']} with **{top_rbm['Count Conv (%)']:.2f}%** count conversion")
         
         with col2:
-            st.info(f"💰 **Overall AHSP**: **₹{june_ahsp:,.2f}**")
+            st.info(f"💰 **Overall AHSP**: **₹{ahsp:,.2f}**")
 
 else:
-    st.error("❌ Failed to load data from Google Sheets. Please check the Apps Script URL, Spreadsheet ID, or network connection.")
+    st.error(f"❌ Failed to load data from Google Sheets for {st.session_state.selected_sheet}. Please check the Apps Script URL, Spreadsheet ID, or network connection.")
