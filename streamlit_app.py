@@ -1900,37 +1900,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         else:
             st.info("ℹ️ No item category data available with current filters.")
 
-        # Insights Section
-        if "All" in st.session_state.selected_sheets:
-            st.markdown(f'<h3 class="subheader">💡 Performance Insights & Key Takeaways - All Months Combined</h3>', unsafe_allow_html=True)
-        elif len(st.session_state.selected_sheets) == 1:
-            st.markdown(f'<h3 class="subheader">💡 Performance Insights & Key Takeaways - {current_month}</h3>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<h3 class="subheader">💡 Performance Insights & Key Takeaways - Combined View</h3>', unsafe_allow_html=True)
-        
-        if not store_summary.empty:
-            top_store = store_summary.loc[store_summary['Count Conv (%)'].idxmax()]
-            bottom_store = store_summary.loc[store_summary['Count Conv (%)'].idxmin()]
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.success(f"🏆 **Top Performing Store**: {top_store['Store']} with **{top_store['Count Conv (%)']:.2f}%** count conversion")
-            
-            with col2:
-                st.warning(f"📉 **Store Needing Improvement**: {bottom_store['Store']} with **{bottom_store['Count Conv (%)']:.2f}%** count conversion")
-        
-        if not rbm_summary.empty:
-            top_rbm = rbm_summary.loc[rbm_summary['Count Conv (%)'].idxmax()]
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.info(f"👑 **Top Performing RBM**: {top_rbm['RBM']} with **{top_rbm['Count Conv (%)']:.2f}%** count conversion")
-            
-            with col2:
-                st.info(f"💰 **Overall AHSP**: **₹{ahsp:,.2f}**")
-
+    
     # MONTHLY TREND CHART SECTION - Show for all scenarios
     st.markdown(f'<h3 class="subheader">📈 Monthly Warranty Sales Trend</h3>', unsafe_allow_html=True)
     
