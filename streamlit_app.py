@@ -6,6 +6,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from io import BytesIO
+import time
 
 # Streamlit page configuration
 st.set_page_config(page_title="Warranty Conversion Dashboard", layout="wide", initial_sidebar_state="expanded")
@@ -16,7 +17,7 @@ APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwx04lOl9zasbQUwCDeGV
 # Configure requests with retry logic
 session = requests.Session()
 retries = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
-session.mount('https://', HTTPAdapter(max_retries=retries))
+session.mount('https', HTTPAdapter(max_retries=retries))
 
 # Available sheets
 SHEETS = [
@@ -31,9 +32,6 @@ SHEETS = [
     "2025 AUG",
     "2025 SEP"
 ]
-
-# In sidebar
-selected_sheet = st.selectbox("Select Month", SHEETS, index=0)
 
 # Function to fetch data from Google Sheets for a specific sheet
 @st.cache_data(ttl=60)  # Cache for 60 seconds
@@ -52,7 +50,7 @@ def fetch_data_from_sheets(sheet_name):
         st.error(f"Failed to connect to Google Sheets for {sheet_name}: {str(e)}")
         return None
 
-# Enhanced CSS for modern, attractive styling
+# Enhanced CSS for modern, attractive styling with loading animation
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -115,6 +113,81 @@ st.markdown("""
             }
         }
         
+        /* Loading Animation */
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px;
+            text-align: center;
+        }
+        
+        .loading-spinner {
+            width: 80px;
+            height: 80px;
+            border: 8px solid #f3f4f6;
+            border-top: 8px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        .loading-spinner-small {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f4f6;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 10px;
+        }
+        
+        .loading-subtext {
+            font-size: 1em;
+            color: #64748b;
+            max-width: 500px;
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        /* Progress Bar */
+        .progress-container {
+            width: 100%;
+            background-color: #f1f5f9;
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow: hidden;
+            height: 12px;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #06b6d4);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        
         /* Subheaders */
         .subheader {
             color: #1e293b;
@@ -137,6 +210,31 @@ st.markdown("""
             right: 25px;
             height: 3px;
             background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 100%);
+            border-radius: 2px;
+        }
+        
+        /* Comparison Header */
+        .comparison-header {
+            color: #1e293b;
+            font-size: 1.5em;
+            font-weight: 800;
+            margin: 30px 0 20px 0;
+            padding: 18px 22px;
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-radius: 14px;
+            border-left: 6px solid #f59e0b;
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.15);
+            position: relative;
+        }
+        
+        .comparison-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 22px;
+            right: 22px;
+            height: 3px;
+            background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
             border-radius: 2px;
         }
         
@@ -183,7 +281,8 @@ st.markdown("""
         
         /* Input Fields */
         .stTextInput>div>div>input,
-        .stSelectbox>div>div>select {
+        .stSelectbox>div>div>select,
+        .stDateInput>div>div>input {
             border-radius: 10px;
             border: 2px solid #e2e8f0;
             padding: 12px 16px;
@@ -193,7 +292,8 @@ st.markdown("""
         }
         
         .stTextInput>div>div>input:focus,
-        .stSelectbox>div>div>select:focus {
+        .stSelectbox>div>div>select:focus,
+        .stDateInput>div>div>input:focus {
             border-color: #667eea;
             box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
             outline: none;
@@ -413,6 +513,36 @@ st.markdown("""
         .low-value-conversion {
             background-color: #fee2e2 !important;
         }
+        
+        /* Multi-select styling */
+        .stMultiSelect [data-baseweb="tag"] {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        
+        /* Comparison metrics */
+        .comparison-metric {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+            border: 2px solid #f59e0b !important;
+        }
+        
+        .comparison-metric [data-testid="stMetricValue"] {
+            background: linear-gradient(135deg, #92400e 0%, #b45309 100%) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            background-clip: text !important;
+        }
+        
+        .positive-change {
+            color: #059669 !important;
+            font-weight: 700;
+        }
+        
+        .negative-change {
+            color: #dc2626 !important;
+            font-weight: 700;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -520,25 +650,280 @@ def get_appliance_type(item_category):
     else:
         return 'Small Appliance'
 
+# Function to display loading animation
+def show_loading_animation(message="Loading Data", submessage="Please wait while we fetch your data..."):
+    st.markdown(f"""
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <div class="loading-text pulse">{message}</div>
+            <div class="loading-subtext">{submessage}</div>
+            <div class="progress-container">
+                <div class="progress-bar" style="width: 70%;"></div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+# Function to calculate comparison metrics for all tables
+def calculate_comparison(month1_data, month2_data, month1_name, month2_name):
+    """Calculate comparison metrics between two months for all tables"""
+    comparison_data = {}
+    
+    # Store Performance Comparison
+    store_comp1 = month1_data.groupby('Store').agg({
+        'WarrantyPrice': 'sum',
+        'TotalSoldPrice': 'sum',
+        'WarrantyCount': 'sum',
+        'TotalCount': 'sum'
+    }).reset_index()
+    
+    store_comp2 = month2_data.groupby('Store').agg({
+        'WarrantyPrice': 'sum',
+        'TotalSoldPrice': 'sum',
+        'WarrantyCount': 'sum',
+        'TotalCount': 'sum'
+    }).reset_index()
+    
+    # Calculate metrics for both months - CORRECTED: Use WarrantyCount for warranty units and count conversion
+    store_comp1['Value Conv (%)'] = (store_comp1['WarrantyPrice'] / store_comp1['TotalSoldPrice'] * 100).round(2)
+    store_comp1['Count Conv (%)'] = (store_comp1['WarrantyCount'] / store_comp1['TotalCount'] * 100).round(2)
+    store_comp1['AHSP'] = (store_comp1['WarrantyPrice'] / store_comp1['WarrantyCount']).where(store_comp1['WarrantyCount'] > 0, 0).round(2)
+    
+    store_comp2['Value Conv (%)'] = (store_comp2['WarrantyPrice'] / store_comp2['TotalSoldPrice'] * 100).round(2)
+    store_comp2['Count Conv (%)'] = (store_comp2['WarrantyCount'] / store_comp2['TotalCount'] * 100).round(2)
+    store_comp2['AHSP'] = (store_comp2['WarrantyPrice'] / store_comp2['WarrantyCount']).where(store_comp2['WarrantyCount'] > 0, 0).round(2)
+    
+    # Merge for comparison
+    store_comparison = pd.merge(store_comp1, store_comp2, on='Store', suffixes=(f'_{month1_name}', f'_{month2_name}'))
+    
+    # Calculate changes
+    store_comparison['Value Conv Change'] = store_comparison[f'Value Conv (%)_{month2_name}'] - store_comparison[f'Value Conv (%)_{month1_name}']
+    store_comparison['Count Conv Change'] = store_comparison[f'Count Conv (%)_{month2_name}'] - store_comparison[f'Count Conv (%)_{month1_name}']
+    store_comparison['AHSP Change'] = store_comparison[f'AHSP_{month2_name}'] - store_comparison[f'AHSP_{month1_name}']
+    store_comparison['Warranty Sales Change'] = store_comparison[f'WarrantyPrice_{month2_name}'] - store_comparison[f'WarrantyPrice_{month1_name}']
+    store_comparison['Warranty Units Change'] = store_comparison[f'WarrantyCount_{month2_name}'] - store_comparison[f'WarrantyCount_{month1_name}']
+    
+    # Calculate percentage changes
+    store_comparison['Warranty Sales Change %'] = ((store_comparison[f'WarrantyPrice_{month2_name}'] - store_comparison[f'WarrantyPrice_{month1_name}']) / store_comparison[f'WarrantyPrice_{month1_name}'] * 100).where(store_comparison[f'WarrantyPrice_{month1_name}'] > 0, 0).round(2)
+    store_comparison['Warranty Units Change %'] = ((store_comparison[f'WarrantyCount_{month2_name}'] - store_comparison[f'WarrantyCount_{month1_name}']) / store_comparison[f'WarrantyCount_{month1_name}'] * 100).where(store_comparison[f'WarrantyCount_{month1_name}'] > 0, 0).round(2)
+    
+    comparison_data['store_comparison'] = store_comparison
+    
+    # Staff Performance Comparison
+    staff_comp1 = month1_data.groupby(['Staff Name', 'Store']).agg({
+        'WarrantyPrice': 'sum',
+        'TotalSoldPrice': 'sum',
+        'WarrantyCount': 'sum',
+        'TotalCount': 'sum'
+    }).reset_index()
+    
+    staff_comp2 = month2_data.groupby(['Staff Name', 'Store']).agg({
+        'WarrantyPrice': 'sum',
+        'TotalSoldPrice': 'sum',
+        'WarrantyCount': 'sum',
+        'TotalCount': 'sum'
+    }).reset_index()
+    
+    staff_comp1['Value Conv (%)'] = (staff_comp1['WarrantyPrice'] / staff_comp1['TotalSoldPrice'] * 100).round(2)
+    staff_comp1['Count Conv (%)'] = (staff_comp1['WarrantyCount'] / staff_comp1['TotalCount'] * 100).round(2)
+    staff_comp1['AHSP'] = (staff_comp1['WarrantyPrice'] / staff_comp1['WarrantyCount']).where(staff_comp1['WarrantyCount'] > 0, 0).round(2)
+    
+    staff_comp2['Value Conv (%)'] = (staff_comp2['WarrantyPrice'] / staff_comp2['TotalSoldPrice'] * 100).round(2)
+    staff_comp2['Count Conv (%)'] = (staff_comp2['WarrantyCount'] / staff_comp2['TotalCount'] * 100).round(2)
+    staff_comp2['AHSP'] = (staff_comp2['WarrantyPrice'] / staff_comp2['WarrantyCount']).where(staff_comp2['WarrantyCount'] > 0, 0).round(2)
+    
+    staff_comparison = pd.merge(staff_comp1, staff_comp2, on=['Staff Name', 'Store'], suffixes=(f'_{month1_name}', f'_{month2_name}'))
+    
+    staff_comparison['Value Conv Change'] = staff_comparison[f'Value Conv (%)_{month2_name}'] - staff_comparison[f'Value Conv (%)_{month1_name}']
+    staff_comparison['Count Conv Change'] = staff_comparison[f'Count Conv (%)_{month2_name}'] - staff_comparison[f'Count Conv (%)_{month1_name}']
+    staff_comparison['AHSP Change'] = staff_comparison[f'AHSP_{month2_name}'] - staff_comparison[f'AHSP_{month1_name}']
+    staff_comparison['Warranty Sales Change'] = staff_comparison[f'WarrantyPrice_{month2_name}'] - staff_comparison[f'WarrantyPrice_{month1_name}']
+    staff_comparison['Warranty Units Change'] = staff_comparison[f'WarrantyCount_{month2_name}'] - staff_comparison[f'WarrantyCount_{month1_name}']
+    
+    comparison_data['staff_comparison'] = staff_comparison
+    
+    # RBM Performance Comparison
+    rbm_comp1 = month1_data.groupby('RBM').agg({
+        'WarrantyPrice': 'sum',
+        'TotalSoldPrice': 'sum',
+        'WarrantyCount': 'sum',
+        'TotalCount': 'sum'
+    }).reset_index()
+    
+    rbm_comp2 = month2_data.groupby('RBM').agg({
+        'WarrantyPrice': 'sum',
+        'TotalSoldPrice': 'sum',
+        'WarrantyCount': 'sum',
+        'TotalCount': 'sum'
+    }).reset_index()
+    
+    rbm_comp1['Value Conv (%)'] = (rbm_comp1['WarrantyPrice'] / rbm_comp1['TotalSoldPrice'] * 100).round(2)
+    rbm_comp1['Count Conv (%)'] = (rbm_comp1['WarrantyCount'] / rbm_comp1['TotalCount'] * 100).round(2)
+    rbm_comp1['AHSP'] = (rbm_comp1['WarrantyPrice'] / rbm_comp1['WarrantyCount']).where(rbm_comp1['WarrantyCount'] > 0, 0).round(2)
+    
+    rbm_comp2['Value Conv (%)'] = (rbm_comp2['WarrantyPrice'] / rbm_comp2['TotalSoldPrice'] * 100).round(2)
+    rbm_comp2['Count Conv (%)'] = (rbm_comp2['WarrantyCount'] / rbm_comp2['TotalCount'] * 100).round(2)
+    rbm_comp2['AHSP'] = (rbm_comp2['WarrantyPrice'] / rbm_comp2['WarrantyCount']).where(rbm_comp2['WarrantyCount'] > 0, 0).round(2)
+    
+    rbm_comparison = pd.merge(rbm_comp1, rbm_comp2, on='RBM', suffixes=(f'_{month1_name}', f'_{month2_name}'))
+    
+    rbm_comparison['Value Conv Change'] = rbm_comparison[f'Value Conv (%)_{month2_name}'] - rbm_comparison[f'Value Conv (%)_{month1_name}']
+    rbm_comparison['Count Conv Change'] = rbm_comparison[f'Count Conv (%)_{month2_name}'] - rbm_comparison[f'Count Conv (%)_{month1_name}']
+    rbm_comparison['AHSP Change'] = rbm_comparison[f'AHSP_{month2_name}'] - rbm_comparison[f'AHSP_{month1_name}']
+    rbm_comparison['Warranty Sales Change'] = rbm_comparison[f'WarrantyPrice_{month2_name}'] - rbm_comparison[f'WarrantyPrice_{month1_name}']
+    rbm_comparison['Warranty Units Change'] = rbm_comparison[f'WarrantyCount_{month2_name}'] - rbm_comparison[f'WarrantyCount_{month1_name}']
+    
+    comparison_data['rbm_comparison'] = rbm_comparison
+    
+    # Product Category Performance Comparison
+    category_comp1 = month1_data.groupby('Item Category').agg({
+        'WarrantyPrice': 'sum',
+        'TotalSoldPrice': 'sum',
+        'WarrantyCount': 'sum',
+        'TotalCount': 'sum'
+    }).reset_index()
+    
+    category_comp2 = month2_data.groupby('Item Category').agg({
+        'WarrantyPrice': 'sum',
+        'TotalSoldPrice': 'sum',
+        'WarrantyCount': 'sum',
+        'TotalCount': 'sum'
+    }).reset_index()
+    
+    category_comp1['Value Conv (%)'] = (category_comp1['WarrantyPrice'] / category_comp1['TotalSoldPrice'] * 100).round(2)
+    category_comp1['Count Conv (%)'] = (category_comp1['WarrantyCount'] / category_comp1['TotalCount'] * 100).round(2)
+    category_comp1['AHSP'] = (category_comp1['WarrantyPrice'] / category_comp1['WarrantyCount']).where(category_comp1['WarrantyCount'] > 0, 0).round(2)
+    
+    category_comp2['Value Conv (%)'] = (category_comp2['WarrantyPrice'] / category_comp2['TotalSoldPrice'] * 100).round(2)
+    category_comp2['Count Conv (%)'] = (category_comp2['WarrantyCount'] / category_comp2['TotalCount'] * 100).round(2)
+    category_comp2['AHSP'] = (category_comp2['WarrantyPrice'] / category_comp2['WarrantyCount']).where(category_comp2['WarrantyCount'] > 0, 0).round(2)
+    
+    category_comparison = pd.merge(category_comp1, category_comp2, on='Item Category', suffixes=(f'_{month1_name}', f'_{month2_name}'))
+    
+    category_comparison['Value Conv Change'] = category_comparison[f'Value Conv (%)_{month2_name}'] - category_comparison[f'Value Conv (%)_{month1_name}']
+    category_comparison['Count Conv Change'] = category_comparison[f'Count Conv (%)_{month2_name}'] - category_comparison[f'Count Conv (%)_{month1_name}']
+    category_comparison['AHSP Change'] = category_comparison[f'AHSP_{month2_name}'] - category_comparison[f'AHSP_{month1_name}']
+    category_comparison['Warranty Sales Change'] = category_comparison[f'WarrantyPrice_{month2_name}'] - category_comparison[f'WarrantyPrice_{month1_name}']
+    category_comparison['Warranty Units Change'] = category_comparison[f'WarrantyCount_{month2_name}'] - category_comparison[f'WarrantyCount_{month1_name}']
+    
+    comparison_data['category_comparison'] = category_comparison
+    
+    # Overall KPIs comparison
+    overall_kpis = {
+        'total_warranty_1': month1_data['WarrantyPrice'].sum(),
+        'total_warranty_2': month2_data['WarrantyPrice'].sum(),
+        'total_units_1': month1_data['TotalCount'].sum(),
+        'total_units_2': month2_data['TotalCount'].sum(),
+        'warranty_units_1': month1_data['WarrantyCount'].sum(),
+        'warranty_units_2': month2_data['WarrantyCount'].sum(),
+        'count_conv_1': (month1_data['WarrantyCount'].sum() / month1_data['TotalCount'].sum() * 100) if month1_data['TotalCount'].sum() > 0 else 0,
+        'count_conv_2': (month2_data['WarrantyCount'].sum() / month2_data['TotalCount'].sum() * 100) if month2_data['TotalCount'].sum() > 0 else 0,
+        'value_conv_1': (month1_data['WarrantyPrice'].sum() / month1_data['TotalSoldPrice'].sum() * 100) if month1_data['TotalSoldPrice'].sum() > 0 else 0,
+        'value_conv_2': (month2_data['WarrantyPrice'].sum() / month2_data['TotalSoldPrice'].sum() * 100) if month2_data['TotalSoldPrice'].sum() > 0 else 0,
+        'ahsp_1': (month1_data['WarrantyPrice'].sum() / month1_data['WarrantyCount'].sum()) if month1_data['WarrantyCount'].sum() > 0 else 0,
+        'ahsp_2': (month2_data['WarrantyPrice'].sum() / month2_data['WarrantyCount'].sum()) if month2_data['WarrantyCount'].sum() > 0 else 0,
+    }
+    
+    # Calculate overall changes
+    overall_kpis['warranty_change'] = overall_kpis['total_warranty_2'] - overall_kpis['total_warranty_1']
+    overall_kpis['warranty_change_pct'] = (overall_kpis['warranty_change'] / overall_kpis['total_warranty_1'] * 100) if overall_kpis['total_warranty_1'] > 0 else 0
+    overall_kpis['warranty_units_change'] = overall_kpis['warranty_units_2'] - overall_kpis['warranty_units_1']
+    overall_kpis['warranty_units_change_pct'] = (overall_kpis['warranty_units_change'] / overall_kpis['warranty_units_1'] * 100) if overall_kpis['warranty_units_1'] > 0 else 0
+    overall_kpis['count_conv_change'] = overall_kpis['count_conv_2'] - overall_kpis['count_conv_1']
+    overall_kpis['value_conv_change'] = overall_kpis['value_conv_2'] - overall_kpis['value_conv_1']
+    overall_kpis['ahsp_change'] = overall_kpis['ahsp_2'] - overall_kpis['ahsp_1']
+    
+    comparison_data['overall_kpis'] = overall_kpis
+    
+    return comparison_data
+
+# Function to create monthly warranty sales trend chart
+def create_monthly_trend_chart(individual_data):
+    """Create a line chart showing warranty sales trend across all months"""
+    monthly_trend = []
+    
+    for month_name, month_data in individual_data.items():
+        total_warranty = month_data['WarrantyPrice'].sum()
+        monthly_trend.append({
+            'Month': month_name,
+            'Warranty Sales': total_warranty
+        })
+    
+    trend_df = pd.DataFrame(monthly_trend)
+    
+    if not trend_df.empty:
+        fig = px.line(
+            trend_df, 
+            x='Month', 
+            y='Warranty Sales',
+            title='📈 Monthly Warranty Sales Trend',
+            markers=True,
+            line_shape='spline'
+        )
+        
+        fig.update_layout(
+            xaxis_title='Month',
+            yaxis_title='Warranty Sales (₹)',
+            hovermode='x unified',
+            showlegend=False,
+            plot_bgcolor='white',
+            height=400
+        )
+        
+        fig.update_traces(
+            line=dict(color='#3b82f6', width=4),
+            marker=dict(size=8, color='#1e40af')
+        )
+        
+        return fig
+    return None
+
 # Session state initialization
 if 'data_loaded' not in st.session_state:
     st.session_state.data_loaded = False
 if 'current_df' not in st.session_state:
     st.session_state.current_df = None
-if 'selected_sheet' not in st.session_state:
-    st.session_state.selected_sheet = SHEETS[0]  # Default to first sheet
+if 'selected_sheets' not in st.session_state:
+    st.session_state.selected_sheets = [SHEETS[0]]  # Default to first sheet
+if 'individual_month_data' not in st.session_state:
+    st.session_state.individual_month_data = {}
+if 'comparison_filters' not in st.session_state:
+    st.session_state.comparison_filters = {
+        'selected_bdm': 'All',
+        'selected_rbm': 'All', 
+        'selected_store': 'All',
+        'selected_category': 'All',
+        'selected_staff': 'All',
+        'replacement_filter': False,
+        'speaker_filter': False,
+        'future_filter': False
+    }
 
 # Sidebar content
 with st.sidebar:
     st.markdown('<h2 style="color: #1e293b; font-weight: 700; margin-bottom: 20px;">🔍 Dashboard Controls</h2>', unsafe_allow_html=True)
     st.markdown('<hr>', unsafe_allow_html=True)
     
-    # Month selection dropdown
-    selected_sheet = st.selectbox("📅 Select Month", SHEETS, index=SHEETS.index(st.session_state.selected_sheet))
+    # Month selection - Multi-select for multiple sheets with "All" option
+    month_options = ["All"] + SHEETS
     
-    # Update session state if month changes
-    if selected_sheet != st.session_state.selected_sheet:
-        st.session_state.selected_sheet = selected_sheet
+    selected_sheets = st.multiselect(
+        "📅 Select Month(s) for Comparison", 
+        month_options, 
+        default=st.session_state.selected_sheets,
+        help="Select 'All' to combine all months data, or select specific months for comparison"
+    )
+    
+    # Handle "All" selection logic
+    if "All" in selected_sheets:
+        # If "All" is selected, select all months and remove individual month selections
+        selected_sheets = ["All"]
+    elif len(selected_sheets) > 1 and "All" in selected_sheets:
+        # If multiple selections including "All", keep only "All"
+        selected_sheets = ["All"]
+    
+    # Update session state if selection changes
+    if selected_sheets != st.session_state.selected_sheets:
+        st.session_state.selected_sheets = selected_sheets
         st.session_state.current_df = None
         st.session_state.data_loaded = False
         st.cache_data.clear()
@@ -548,16 +933,31 @@ with st.sidebar:
         st.cache_data.clear()
         st.session_state.current_df = None
         st.session_state.data_loaded = False
+        st.session_state.individual_month_data = {}
         st.rerun()
 
+# Generate dashboard title based on selected sheets
+if len(st.session_state.selected_sheets) == 0:
+    dashboard_title = "📊 Warranty Conversion Analysis Dashboard - No Month Selected"
+elif "All" in st.session_state.selected_sheets:
+    dashboard_title = "📊 Warranty Conversion Analysis Dashboard - All Months Combined"
+elif len(st.session_state.selected_sheets) == 1:
+    dashboard_title = f"📊 Warranty Conversion Analysis Dashboard - {st.session_state.selected_sheets[0]}"
+else:
+    if len(st.session_state.selected_sheets) == len(SHEETS):
+        dashboard_title = "📊 Warranty Conversion Analysis Dashboard - All Months Comparison"
+    else:
+        dashboard_title = f"📊 Warranty Conversion Analysis Dashboard - {len(st.session_state.selected_sheets)} Months Comparison"
+
 # Main dashboard header
-st.markdown(f'<div class="main-header">📊 Warranty Conversion Analysis Dashboard - {st.session_state.selected_sheet}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="main-header">{dashboard_title}</div>', unsafe_allow_html=True)
 
 # Load data function
 required_columns = ['Item Category', 'BDM', 'RBM', 'Store', 'Staff Name', 'TotalSoldPrice', 'WarrantyPrice', 'TotalCount', 'WarrantyCount']
 
 @st.cache_data
-def load_data(sheet_name):
+def load_individual_month(sheet_name):
+    """Load individual month data"""
     try:
         df = fetch_data_from_sheets(sheet_name)
         if df is None:
@@ -579,6 +979,7 @@ def load_data(sheet_name):
         df['Replacement Category'] = df['Item Category'].apply(map_to_replacement_category)
         df['Appliance Type'] = df['Item Category'].apply(get_appliance_type)
         
+        # CORRECTED: Use WarrantyCount for warranty units and count conversion
         df['Conversion% (Count)'] = (df['WarrantyCount'] / df['TotalCount'] * 100).round(2)
         df['Conversion% (Price)'] = (df['WarrantyPrice'] / df['TotalSoldPrice'] * 100).where(df['TotalSoldPrice'] > 0, 0).round(2)
         df['AHSP'] = (df['WarrantyPrice'] / df['WarrantyCount']).where(df['WarrantyCount'] > 0, 0).round(2)
@@ -586,29 +987,96 @@ def load_data(sheet_name):
         
         return df
     except Exception as e:
-        st.error(f"❌ Error loading data from Google Sheets for {sheet_name}: {str(e)}")
+        st.error(f"❌ Error loading data for {sheet_name}: {str(e)}")
         return None
 
+@st.cache_data
+def load_all_data(sheet_names):
+    """Load data for all selected sheets"""
+    try:
+        # Show loading animation
+        with st.spinner(''):
+            # Handle "All" selection
+            if "All" in sheet_names:
+                actual_sheets = SHEETS
+                show_loading_animation(
+                    "Loading All Months Data", 
+                    "Combining data from all available months..."
+                )
+            elif len(sheet_names) > 1:
+                show_loading_animation(
+                    f"Loading {len(sheet_names)} Months Data", 
+                    f"Loading data for comparison: {', '.join(sheet_names)}"
+                )
+            else:
+                show_loading_animation(
+                    f"Loading {sheet_names[0]} Data", 
+                    "Fetching data from Google Sheets and processing..."
+                )
+            
+            # Simulate loading time for better UX
+            time.sleep(1.5)
+            
+            all_dfs = []
+            individual_data = {}
+            
+            # Determine which sheets to load
+            sheets_to_load = SHEETS if "All" in sheet_names else sheet_names
+            
+            for sheet_name in sheets_to_load:
+                df = load_individual_month(sheet_name)
+                if df is not None:
+                    all_dfs.append(df)
+                    individual_data[sheet_name] = df
+                else:
+                    st.error(f"Failed to load data for {sheet_name}")
+            
+            if not all_dfs:
+                st.error("❌ No data could be loaded from any selected sheets.")
+                return None, None
+            
+            # Combine all DataFrames
+            combined_df = pd.concat(all_dfs, ignore_index=True)
+            return combined_df, individual_data
+            
+    except Exception as e:
+        st.error(f"❌ Error loading data from Google Sheets: {str(e)}")
+        return None, None
+
 # Load data from Google Sheets
-if st.session_state.current_df is None:
-    df = load_data(st.session_state.selected_sheet)
-    if df is not None:
-        st.session_state.current_df = df
+if st.session_state.current_df is None and st.session_state.selected_sheets:
+    combined_df, individual_data = load_all_data(st.session_state.selected_sheets)
+    if combined_df is not None:
+        st.session_state.current_df = combined_df
+        st.session_state.individual_month_data = individual_data
         st.session_state.data_loaded = True
+        if "All" in st.session_state.selected_sheets:
+            st.success(f"✅ Data loaded successfully for all {len(SHEETS)} months combined!")
+        elif len(st.session_state.selected_sheets) > 1:
+            st.success(f"✅ Data loaded successfully for {len(st.session_state.selected_sheets)} months comparison!")
+        else:
+            st.success(f"✅ Data loaded successfully for {st.session_state.selected_sheets[0]}!")
+        st.rerun()
 
 # Now that we have data, set up the filters in sidebar
 if st.session_state.data_loaded and st.session_state.current_df is not None:
     df = st.session_state.current_df
+    individual_data = st.session_state.individual_month_data
     
     with st.sidebar:
         # Sidebar filters
         st.markdown('<hr>', unsafe_allow_html=True)
         st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin-top: 20px;">⚙️ Filters</h3>', unsafe_allow_html=True)
         
-        replacement_filter = st.checkbox("🔄 Show Replacement Warranty Categories Only")
-        speaker_filter = st.checkbox("🔊 Show Speaker Categories Only")
-        future_filter = st.checkbox("🏢 Show only FUTURE stores")
+        replacement_filter = st.checkbox("🔄 Show Replacement Warranty Categories Only", value=st.session_state.comparison_filters['replacement_filter'])
+        speaker_filter = st.checkbox("🔊 Show Speaker Categories Only", value=st.session_state.comparison_filters['speaker_filter'])
+        future_filter = st.checkbox("🏢 Show only FUTURE stores", value=st.session_state.comparison_filters['future_filter'])
         
+        # Update session state for filters
+        st.session_state.comparison_filters['replacement_filter'] = replacement_filter
+        st.session_state.comparison_filters['speaker_filter'] = speaker_filter
+        st.session_state.comparison_filters['future_filter'] = future_filter
+
         # Value Conversion range filter
         st.markdown('<hr>', unsafe_allow_html=True)
         st.markdown('<h4 style="color: #1e293b; font-weight: 600;">📊 Value Conversion Filter</h4>', unsafe_allow_html=True)
@@ -659,341 +1127,646 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         store_options = ['All'] + sorted(df['Store'].unique().tolist())
         category_options = ['All'] + sorted(df[category_column].unique().tolist())
 
-        selected_bdm = st.selectbox("👔 BDM", bdm_options, index=0)
-        selected_rbm = st.selectbox("👤 RBM", rbm_options, index=0)
-        selected_store = st.selectbox("🏪 Store", store_options, index=0)
-        selected_category = st.selectbox(f"📦 {category_column}", category_options, index=0)
+        selected_bdm = st.selectbox("👔 BDM", bdm_options, index=bdm_options.index(st.session_state.comparison_filters['selected_bdm']) if st.session_state.comparison_filters['selected_bdm'] in bdm_options else 0)
+        selected_rbm = st.selectbox("👤 RBM", rbm_options, index=rbm_options.index(st.session_state.comparison_filters['selected_rbm']) if st.session_state.comparison_filters['selected_rbm'] in rbm_options else 0)
+        selected_store = st.selectbox("🏪 Store", store_options, index=store_options.index(st.session_state.comparison_filters['selected_store']) if st.session_state.comparison_filters['selected_store'] in store_options else 0)
+        selected_category = st.selectbox(f"📦 {category_column}", category_options, index=category_options.index(st.session_state.comparison_filters['selected_category']) if st.session_state.comparison_filters['selected_category'] in category_options else 0)
 
         if selected_rbm != 'All':
             staff_options = ['All'] + sorted(df[df['RBM'] == selected_rbm]['Staff Name'].unique().tolist())
         else:
             staff_options = ['All'] + sorted(df['Staff Name'].unique().tolist())
-        selected_staff = st.selectbox("👨‍💼 Staff", staff_options, index=0)
+        selected_staff = st.selectbox("👨‍💼 Staff", staff_options, index=staff_options.index(st.session_state.comparison_filters['selected_staff']) if st.session_state.comparison_filters['selected_staff'] in staff_options else 0)
 
-    # Apply filters
-    filtered_df = df.copy()
-    if selected_bdm != 'All':
-        filtered_df = filtered_df[filtered_df['BDM'] == selected_bdm]
-    if selected_rbm != 'All':
-        filtered_df = filtered_df[filtered_df['RBM'] == selected_rbm]
-    if selected_store != 'All':
-        filtered_df = filtered_df[filtered_df['Store'] == selected_store]
-    if selected_category != 'All':
-        filtered_df = filtered_df[filtered_df[category_column] == selected_category]
-    if selected_staff != 'All':
-        filtered_df = filtered_df[filtered_df['Staff Name'] == selected_staff]
-    if future_filter:
-        filtered_df = filtered_df[filtered_df['Store'].str.contains('FUTURE', case=True)]
+        # Update session state for dropdown filters
+        st.session_state.comparison_filters['selected_bdm'] = selected_bdm
+        st.session_state.comparison_filters['selected_rbm'] = selected_rbm
+        st.session_state.comparison_filters['selected_store'] = selected_store
+        st.session_state.comparison_filters['selected_category'] = selected_category
+        st.session_state.comparison_filters['selected_staff'] = selected_staff
+
+    # Apply filters function for comparison data
+    def apply_comparison_filters(data, filters, category_column, replacement_filter, speaker_filter):
+        """Apply filters to comparison data"""
+        filtered_data = data.copy()
+        
+        # Apply replacement or speaker filter first
+        if replacement_filter:
+            replacement_categories = ['FAN', 'MIXER GRINDER', 'IRON BOX', 'ELECTRIC KETTLE', 'OTG', 'STEAMER', 'INDUCTION COOKER']
+            filtered_data = filtered_data[filtered_data['Replacement Category'].isin(replacement_categories)]
+        elif speaker_filter:
+            speaker_categories = ['SOUND BAR', 'PARTY SPEAKER', 'BLUETOOTH SPEAKER', 'HOME THEATRE']
+            filtered_data = filtered_data[filtered_data['Item Category'].isin(speaker_categories)]
+        
+        # Apply other filters
+        if filters['selected_bdm'] != 'All':
+            filtered_data = filtered_data[filtered_data['BDM'] == filters['selected_bdm']]
+        if filters['selected_rbm'] != 'All':
+            filtered_data = filtered_data[filtered_data['RBM'] == filters['selected_rbm']]
+        if filters['selected_store'] != 'All':
+            filtered_data = filtered_data[filtered_data['Store'] == filters['selected_store']]
+        if filters['selected_category'] != 'All':
+            filtered_data = filtered_data[filtered_data[category_column] == filters['selected_category']]
+        if filters['selected_staff'] != 'All':
+            filtered_data = filtered_data[filtered_data['Staff Name'] == filters['selected_staff']]
+        if filters['future_filter']:
+            filtered_data = filtered_data[filtered_data['Store'].str.contains('FUTURE', case=True)]
+            
+        return filtered_data
+
+    # Apply filters to main data
+    filtered_df = apply_comparison_filters(
+        df, 
+        st.session_state.comparison_filters, 
+        category_column,
+        replacement_filter,
+        speaker_filter
+    )
 
     if filtered_df.empty:
         st.warning("⚠️ No data matches your filters.")
         st.stop()
 
-    # Main dashboard
-    st.markdown(f'<h2 class="subheader">📈 {st.session_state.selected_sheet} Performance Overview</h2>', unsafe_allow_html=True)
+    # Generate period text for subheaders
+    if "All" in st.session_state.selected_sheets:
+        period_text = "All Months Combined"
+    elif len(st.session_state.selected_sheets) == 1:
+        period_text = st.session_state.selected_sheets[0]
+    else:
+        period_text = f"{len(st.session_state.selected_sheets)} Selected Months"
 
-    # KPI metrics
-    st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin: 25px 0 15px 0;">🎯 Key Performance Indicators</h3>', unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns(4)
-
-    total_warranty = filtered_df['WarrantyPrice'].sum()
-    total_units = filtered_df['TotalCount'].sum()
-    total_warranty_units = filtered_df['WarrantyCount'].sum()
-    total_sales = filtered_df['TotalSoldPrice'].sum()
-    count_conversion = (total_warranty_units / total_units * 100) if total_units > 0 else 0
-    value_conversion = (total_warranty / total_sales * 100) if total_sales > 0 else 0
-    ahsp = (total_warranty / total_warranty_units) if total_warranty_units > 0 else 0
-
-    with col1:
-        st.metric("💰 Warranty Sales", f"₹{total_warranty:,.0f}")
-    with col2:
-        st.metric("📊 Count Conversion", f"{count_conversion:.2f}%")
-    with col3:
-        st.metric("📈 Value Conversion", f"{value_conversion:.2f}%")
-    with col4:
-        st.metric("💵 AHSP", f"₹{ahsp:,.2f}")
-
-    # Store Performance
-    st.markdown(f'<h3 class="subheader">🏬 Store Performance Analysis - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
-
-    store_summary = filtered_df.groupby('Store').agg({
-        'TotalSoldPrice': 'sum',
-        'WarrantyPrice': 'sum',
-        'TotalCount': 'sum',
-        'WarrantyCount': 'sum'
-    }).reset_index()
-
-    store_summary['Count Conv (%)'] = (store_summary['WarrantyCount'] / store_summary['TotalCount'] * 100).round(2)
-    store_summary['Value Conv (%)'] = (store_summary['WarrantyPrice'] / store_summary['TotalSoldPrice'] * 100).round(2)
-    store_summary['AHSP'] = (store_summary['WarrantyPrice'] / store_summary['WarrantyCount']).where(store_summary['WarrantyCount'] > 0, 0).round(2)
-
-    store_summary['Count Conv (%)'] = store_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
-    store_summary['Value Conv (%)'] = store_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
-
-    store_display = store_summary[['Store', 'WarrantyPrice', 'WarrantyCount', 'Count Conv (%)', 'Value Conv (%)', 'AHSP']].copy()
-    store_display.columns = ['Store', 'Warranty Sales (₹)', 'Warranty Units', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)']
-
-    total_sales = store_summary['TotalSoldPrice'].sum()
-    total_warranty_sales = store_summary['WarrantyPrice'].sum()
-    total_units = store_summary['TotalCount'].sum()
-    total_warranty_units = store_summary['TotalCount'].sum()
-    
-    total_count_conv = (total_warranty_units / total_units * 100) if total_units > 0 else 0
-    total_value_conv = (total_warranty_sales / total_sales * 100) if total_sales > 0 else 0
-    total_ahsp = (total_warranty_sales / total_warranty_units) if total_warranty_units > 0 else 0
-
-    total_row = pd.DataFrame({
-        'Store': ['Total'],
-        'Warranty Sales (₹)': [total_warranty_sales],
-        'Warranty Units': [total_warranty_units],
-        'Count Conv (%)': [round(total_count_conv, 2)],
-        'Value Conv (%)': [round(total_value_conv, 2)],
-        'AHSP (₹)': [round(total_ahsp, 2)]
-    })
-
-    non_total_stores = store_display[store_display['Store'] != 'Total']
-
-    if value_conv_range != (min_conv, max_conv):
-        non_total_stores = non_total_stores[
-            (non_total_stores['Value Conv (%)'] >= value_conv_range[0]) & 
-            (non_total_stores['Value Conv (%)'] <= value_conv_range[1])
-        ]
-
-    sort_ascending = True if sort_order == "Ascending" else False
-
-    sort_column_mapping = {
-        "Count Conv (%)": "Count Conv (%)",
-        "Value Conv (%)": "Value Conv (%)", 
-        "AHSP (₹)": "AHSP (₹)",
-        "Warranty Sales (₹)": "Warranty Sales (₹)",
-        "Warranty Units": "Warranty Units"
-    }
-
-    sort_column = sort_column_mapping.get(sort_by, "Count Conv (%)")
-    non_total_stores = non_total_stores.sort_values(sort_column, ascending=sort_ascending)
-
-    final_store_display = pd.concat([non_total_stores, total_row], ignore_index=True)
-
-    def highlight_low_value_conversion(row):
-        if row['Value Conv (%)'] < 2.0 and row['Store'] != 'Total':
-            return ['background-color: #fee2e2'] * len(row)
-        return [''] * len(row)
-
-    styled_final_display = final_store_display.style.format({
-        'Warranty Sales (₹)': '₹{:,.0f}',
-        'Warranty Units': '{:,.0f}',
-        'Count Conv (%)': '{:.2f}%',
-        'Value Conv (%)': '{:.2f}%',
-        'AHSP (₹)': '₹{:.2f}'
-    }).apply(highlight_low_value_conversion, axis=1)
-
-    st.dataframe(styled_final_display, use_container_width=True)
-
-    st.download_button(
-        label="📥 Download Store Performance as Excel",
-        data=to_excel(final_store_display, 'Store Performance'),
-        file_name=f"store_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    store_summary_for_chart = store_summary[store_summary['Store'].isin(non_total_stores['Store'])]
-
-    if not store_summary_for_chart.empty:
-        chart_sort_column_mapping = {
-            "Count Conv (%)": "Count Conv (%)",
-            "Value Conv (%)": "Value Conv (%)",
-            "AHSP (₹)": "AHSP",
-            "Warranty Sales (₹)": "WarrantyPrice", 
-            "Warranty Units": "WarrantyCount"
+    # COMPARISON SECTION - Show only when exactly 2 months are selected (and not "All")
+    if len(st.session_state.selected_sheets) == 2 and "All" not in st.session_state.selected_sheets:
+        st.markdown(f'<div class="comparison-header">📊 Monthly Comparison Analysis</div>', unsafe_allow_html=True)
+        
+        month1 = st.session_state.selected_sheets[0]
+        month2 = st.session_state.selected_sheets[1]
+        
+        st.markdown(f'### 🔄 Comparison: {month1} vs {month2}')
+        
+        # Apply filters to individual month data for comparison
+        month1_filtered = apply_comparison_filters(
+            individual_data[month1], 
+            st.session_state.comparison_filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        month2_filtered = apply_comparison_filters(
+            individual_data[month2], 
+            st.session_state.comparison_filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        
+        # Calculate comparison metrics for all tables with filtered data
+        comparison_data = calculate_comparison(
+            month1_filtered, 
+            month2_filtered, 
+            month1, 
+            month2
+        )
+        
+        # Display overall KPI comparison - Show only changes, not combined totals
+        kpis = comparison_data['overall_kpis']
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            st.metric(
+                "💰 Warranty Sales Change", 
+                f"₹{kpis['warranty_change']:+,.0f}",
+                f"{kpis['warranty_change_pct']:+.1f}%",
+                delta_color="normal"
+            )
+        
+        with col2:
+            st.metric(
+                "📦 Warranty Units Change", 
+                f"{kpis['warranty_units_change']:+,.0f}",
+                f"{kpis['warranty_units_change_pct']:+.1f}%",
+                delta_color="normal"
+            )
+        
+        with col3:
+            st.metric(
+                "📊 Count Conversion Change", 
+                f"{kpis['count_conv_change']:+.2f}%",
+                delta_color="normal"
+            )
+        
+        with col4:
+            st.metric(
+                "📈 Value Conversion Change", 
+                f"{kpis['value_conv_change']:+.2f}%",
+                delta_color="normal"
+            )
+        
+        with col5:
+            st.metric(
+                "💵 AHSP Change", 
+                f"₹{kpis['ahsp_change']:+.2f}",
+                delta_color="normal"
+            )
+        
+        # Store comparison table - Show only changes
+        st.markdown(f'#### 🏬 Store Performance Changes')
+        store_comp = comparison_data['store_comparison']
+        
+        # Create display table with only change columns
+        display_cols = ['Store']
+        # Add change columns only
+        display_cols.extend([
+            'Value Conv Change', 
+            'Count Conv Change', 
+            'AHSP Change', 
+            'Warranty Sales Change',
+            'Warranty Sales Change %',
+            'Warranty Units Change',
+            'Warranty Units Change %'
+        ])
+        
+        # Check if all required columns exist
+        missing_cols = [col for col in display_cols if col not in store_comp.columns]
+        if missing_cols:
+            st.warning(f"Some comparison data is missing: {missing_cols}")
+            # Use only available columns
+            display_cols = [col for col in display_cols if col in store_comp.columns]
+        
+        comparison_display = store_comp[display_cols].copy()
+        
+        # Rename columns for better display
+        column_mapping = {
+            'Value Conv Change': 'Value Conv Change (%)',
+            'Count Conv Change': 'Count Conv Change (%)',
+            'AHSP Change': 'AHSP Change (₹)',
+            'Warranty Sales Change': 'Warranty Sales Change (₹)',
+            'Warranty Sales Change %': 'Warranty Sales Change (%)',
+            'Warranty Units Change': 'Warranty Units Change',
+            'Warranty Units Change %': 'Warranty Units Change (%)'
         }
         
-        chart_sort_column = chart_sort_column_mapping.get(sort_by, "Count Conv (%)")
-        store_summary_for_chart = store_summary_for_chart.sort_values(chart_sort_column, ascending=sort_ascending)
+        comparison_display = comparison_display.rename(columns=column_mapping)
         
-        if sort_by == "Value Conv (%)":
-            chart_y_column = 'Value Conv (%)'
-            chart_title = f'📊 Store Value Conversion - {st.session_state.selected_sheet}'
-            chart_text = 'Value Conv (%)'
-        elif sort_by == "AHSP (₹)":
-            chart_y_column = 'AHSP'
-            chart_title = f'💵 Store AHSP - {st.session_state.selected_sheet}'
-            chart_text = 'AHSP'
-        elif sort_by == "Warranty Sales (₹)":
-            chart_y_column = 'WarrantyPrice'
-            chart_title = f'💰 Store Warranty Sales - {st.session_state.selected_sheet}'
-            chart_text = 'WarrantyPrice'
-        elif sort_by == "Warranty Units":
-            chart_y_column = 'WarrantyCount'
-            chart_title = f'📦 Store Warranty Units - {st.session_state.selected_sheet}'
-            chart_text = 'WarrantyCount'
+        # Format the display
+        def format_comparison_row(row):
+            formats = {}
+            for col in comparison_display.columns:
+                if 'Value Conv Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'Count Conv Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'AHSP Change (₹)' in col:
+                    formats[col] = '₹{:+.2f}'
+                elif 'Warranty Sales Change (₹)' in col:
+                    formats[col] = '₹{:+,.0f}'
+                elif 'Warranty Sales Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'Warranty Units Change' in col:
+                    formats[col] = '{:+,.0f}'
+                elif 'Warranty Units Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+            return formats
+        
+        format_dict = format_comparison_row(comparison_display.iloc[0] if not comparison_display.empty else {})
+        
+        styled_comparison = comparison_display.style.format(format_dict)
+        
+        st.dataframe(styled_comparison, use_container_width=True)
+        
+        # Staff Performance Comparison
+        st.markdown(f'#### 👨‍💼 Staff Performance Changes')
+        staff_comp = comparison_data['staff_comparison']
+        
+        # Create display table with only change columns
+        staff_display_cols = ['Staff Name', 'Store']
+        staff_display_cols.extend([
+            'Value Conv Change', 
+            'Count Conv Change', 
+            'AHSP Change', 
+            'Warranty Sales Change',
+            'Warranty Units Change'
+        ])
+        
+        staff_comparison_display = staff_comp[staff_display_cols].copy()
+        
+        # Rename columns for better display
+        staff_column_mapping = {
+            'Value Conv Change': 'Value Conv Change (%)',
+            'Count Conv Change': 'Count Conv Change (%)',
+            'AHSP Change': 'AHSP Change (₹)',
+            'Warranty Sales Change': 'Warranty Sales Change (₹)',
+            'Warranty Units Change': 'Warranty Units Change'
+        }
+        
+        staff_comparison_display = staff_comparison_display.rename(columns=staff_column_mapping)
+        
+        # Format the display
+        def format_staff_comparison_row(row):
+            formats = {}
+            for col in staff_comparison_display.columns:
+                if 'Value Conv Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'Count Conv Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'AHSP Change (₹)' in col:
+                    formats[col] = '₹{:+.2f}'
+                elif 'Warranty Sales Change (₹)' in col:
+                    formats[col] = '₹{:+,.0f}'
+                elif 'Warranty Units Change' in col:
+                    formats[col] = '{:+,.0f}'
+            return formats
+        
+        staff_format_dict = format_staff_comparison_row(staff_comparison_display.iloc[0] if not staff_comparison_display.empty else {})
+        
+        styled_staff_comparison = staff_comparison_display.style.format(staff_format_dict)
+        
+        st.dataframe(styled_staff_comparison, use_container_width=True)
+        
+        # RBM Performance Comparison
+        st.markdown(f'#### 👥 RBM Performance Changes')
+        rbm_comp = comparison_data['rbm_comparison']
+        
+        # Create display table with only change columns
+        rbm_display_cols = ['RBM']
+        rbm_display_cols.extend([
+            'Value Conv Change', 
+            'Count Conv Change', 
+            'AHSP Change', 
+            'Warranty Sales Change',
+            'Warranty Units Change'
+        ])
+        
+        rbm_comparison_display = rbm_comp[rbm_display_cols].copy()
+        
+        # Rename columns for better display
+        rbm_column_mapping = {
+            'Value Conv Change': 'Value Conv Change (%)',
+            'Count Conv Change': 'Count Conv Change (%)',
+            'AHSP Change': 'AHSP Change (₹)',
+            'Warranty Sales Change': 'Warranty Sales Change (₹)',
+            'Warranty Units Change': 'Warranty Units Change'
+        }
+        
+        rbm_comparison_display = rbm_comparison_display.rename(columns=rbm_column_mapping)
+        
+        # Format the display
+        def format_rbm_comparison_row(row):
+            formats = {}
+            for col in rbm_comparison_display.columns:
+                if 'Value Conv Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'Count Conv Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'AHSP Change (₹)' in col:
+                    formats[col] = '₹{:+.2f}'
+                elif 'Warranty Sales Change (₹)' in col:
+                    formats[col] = '₹{:+,.0f}'
+                elif 'Warranty Units Change' in col:
+                    formats[col] = '{:+,.0f}'
+            return formats
+        
+        rbm_format_dict = format_rbm_comparison_row(rbm_comparison_display.iloc[0] if not rbm_comparison_display.empty else {})
+        
+        styled_rbm_comparison = rbm_comparison_display.style.format(rbm_format_dict)
+        
+        st.dataframe(styled_rbm_comparison, use_container_width=True)
+        
+        # Product Category Performance Comparison
+        st.markdown(f'#### 📦 Product Category Performance Changes')
+        category_comp = comparison_data['category_comparison']
+        
+        # Create display table with only change columns
+        category_display_cols = ['Item Category']
+        category_display_cols.extend([
+            'Value Conv Change', 
+            'Count Conv Change', 
+            'AHSP Change', 
+            'Warranty Sales Change',
+            'Warranty Units Change'
+        ])
+        
+        category_comparison_display = category_comp[category_display_cols].copy()
+        
+        # Rename columns for better display
+        category_column_mapping = {
+            'Value Conv Change': 'Value Conv Change (%)',
+            'Count Conv Change': 'Count Conv Change (%)',
+            'AHSP Change': 'AHSP Change (₹)',
+            'Warranty Sales Change': 'Warranty Sales Change (₹)',
+            'Warranty Units Change': 'Warranty Units Change'
+        }
+        
+        category_comparison_display = category_comparison_display.rename(columns=category_column_mapping)
+        
+        # Format the display
+        def format_category_comparison_row(row):
+            formats = {}
+            for col in category_comparison_display.columns:
+                if 'Value Conv Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'Count Conv Change (%)' in col:
+                    formats[col] = '{:+.2f}%'
+                elif 'AHSP Change (₹)' in col:
+                    formats[col] = '₹{:+.2f}'
+                elif 'Warranty Sales Change (₹)' in col:
+                    formats[col] = '₹{:+,.0f}'
+                elif 'Warranty Units Change' in col:
+                    formats[col] = '{:+,.0f}'
+            return formats
+        
+        category_format_dict = format_category_comparison_row(category_comparison_display.iloc[0] if not category_comparison_display.empty else {})
+        
+        styled_category_comparison = category_comparison_display.style.format(category_format_dict)
+        
+        st.dataframe(styled_category_comparison, use_container_width=True)
+        
+        # Download option for comparison data
+        st.markdown("---")
+        st.markdown("#### 📥 Download Comparison Data")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            store_comparison_download = store_comp[['Store'] + [col for col in store_comp.columns if 'Change' in col]]
+            st.download_button(
+                label="Download Store Comparison",
+                data=to_excel(store_comparison_download, 'Store Comparison'),
+                file_name=f"store_comparison_{month1}_vs_{month2}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        with col2:
+            staff_comparison_download = staff_comp[['Staff Name', 'Store'] + [col for col in staff_comp.columns if 'Change' in col]]
+            st.download_button(
+                label="Download Staff Comparison",
+                data=to_excel(staff_comparison_download, 'Staff Comparison'),
+                file_name=f"staff_comparison_{month1}_vs_{month2}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        with col3:
+            rbm_comparison_download = rbm_comp[['RBM'] + [col for col in rbm_comp.columns if 'Change' in col]]
+            st.download_button(
+                label="Download RBM Comparison",
+                data=to_excel(rbm_comparison_download, 'RBM Comparison'),
+                file_name=f"rbm_comparison_{month1}_vs_{month2}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        with col4:
+            category_comparison_download = category_comp[['Item Category'] + [col for col in category_comp.columns if 'Change' in col]]
+            st.download_button(
+                label="Download Category Comparison",
+                data=to_excel(category_comparison_download, 'Category Comparison'),
+                file_name=f"category_comparison_{month1}_vs_{month2}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        # Add some space between comparisons
+        st.markdown("---")
+
+    # MAIN DASHBOARD SECTION (Individual, Combined, or All data view)
+    # Show this section for all cases except when exactly 2 months are selected for comparison
+    if not (len(st.session_state.selected_sheets) == 2 and "All" not in st.session_state.selected_sheets):
+        if "All" in st.session_state.selected_sheets:
+            # All months combined view
+            st.markdown(f'<h2 class="subheader">📈 All Months Combined Performance Overview</h2>', unsafe_allow_html=True)
+            display_df = filtered_df
+        elif len(st.session_state.selected_sheets) == 1:
+            # Single month view
+            current_month = st.session_state.selected_sheets[0]
+            st.markdown(f'<h2 class="subheader">📈 {current_month} Performance Overview</h2>', unsafe_allow_html=True)
+            
+            # Use individual month data for single month view
+            single_month_df = individual_data[current_month]
+            
+            # Apply filters to single month data
+            single_month_filtered = apply_comparison_filters(
+                single_month_df, 
+                st.session_state.comparison_filters, 
+                category_column,
+                replacement_filter,
+                speaker_filter
+            )
+            
+            # Use filtered single month data for KPIs
+            display_df = single_month_filtered
         else:
-            chart_y_column = 'Count Conv (%)'
-            chart_title = f'📊 Store Count Conversion - {st.session_state.selected_sheet}'
-            chart_text = 'Count Conv (%)'
+            # Multiple months view - show combined data
+            st.markdown(f'<h2 class="subheader">📈 Combined Performance Overview ({len(st.session_state.selected_sheets)} Months)</h2>', unsafe_allow_html=True)
+            display_df = filtered_df
 
-        fig_store = px.bar(store_summary_for_chart, 
-                           x='Store', 
-                           y=chart_y_column, 
-                           title=chart_title,
-                           template='plotly_white',
-                           color=chart_y_column,
-                           color_continuous_scale='Viridis',
-                           text=chart_text)
-        
-        if chart_y_column in ['Count Conv (%)', 'Value Conv (%)']:
-            fig_store.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
-        elif chart_y_column == 'AHSP':
-            fig_store.update_traces(texttemplate='₹%{text:.2f}', textposition='outside')
-        elif chart_y_column == 'WarrantyPrice':
-            fig_store.update_traces(texttemplate='₹%{text:,.0f}', textposition='outside')
+        # KPI metrics
+        st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin: 25px 0 15px 0;">🎯 Key Performance Indicators</h3>', unsafe_allow_html=True)
+        col1, col2, col3, col4, col5 = st.columns(5)
+
+        total_warranty = display_df['WarrantyPrice'].sum()
+        total_units = display_df['TotalCount'].sum()
+        total_warranty_units = display_df['WarrantyCount'].sum()  # CORRECTED: Use WarrantyCount for warranty units
+        total_sales = display_df['TotalSoldPrice'].sum()
+        count_conversion = (total_warranty_units / total_units * 100) if total_units > 0 else 0  # CORRECTED: WarrantyCount/TotalCount
+        value_conversion = (total_warranty / total_sales * 100) if total_sales > 0 else 0
+        ahsp = (total_warranty / total_warranty_units) if total_warranty_units > 0 else 0  # CORRECTED: Use WarrantyCount for AHSP
+
+        with col1:
+            st.metric("💰 Warranty Sales", f"₹{total_warranty:,.0f}")
+        with col2:
+            st.metric("📦 Warranty Units", f"{total_warranty_units:,.0f}")  # CORRECTED: Show WarrantyCount
+        with col3:
+            st.metric("📊 Count Conversion", f"{count_conversion:.2f}%")
+        with col4:
+            st.metric("📈 Value Conversion", f"{value_conversion:.2f}%")
+        with col5:
+            st.metric("💵 AHSP", f"₹{ahsp:,.2f}")
+
+        # Store Performance
+        if "All" in st.session_state.selected_sheets:
+            st.markdown(f'<h3 class="subheader">🏬 Store Performance Analysis - All Months Combined</h3>', unsafe_allow_html=True)
+        elif len(st.session_state.selected_sheets) == 1:
+            st.markdown(f'<h3 class="subheader">🏬 Store Performance Analysis - {current_month}</h3>', unsafe_allow_html=True)
         else:
-            fig_store.update_traces(texttemplate='%{text:.0f}', textposition='outside')
+            st.markdown(f'<h3 class="subheader">🏬 Store Performance Analysis - Combined View</h3>', unsafe_allow_html=True)
+
+        store_summary = display_df.groupby('Store').agg({
+            'TotalSoldPrice': 'sum',
+            'WarrantyPrice': 'sum',
+            'TotalCount': 'sum',
+            'WarrantyCount': 'sum'  # CORRECTED: Include WarrantyCount
+        }).reset_index()
+
+        # CORRECTED: Use WarrantyCount for count conversion and warranty units
+        store_summary['Count Conv (%)'] = (store_summary['WarrantyCount'] / store_summary['TotalCount'] * 100).round(2)
+        store_summary['Value Conv (%)'] = (store_summary['WarrantyPrice'] / store_summary['TotalSoldPrice'] * 100).round(2)
+        store_summary['AHSP'] = (store_summary['WarrantyPrice'] / store_summary['WarrantyCount']).where(store_summary['WarrantyCount'] > 0, 0).round(2)
+
+        store_summary['Count Conv (%)'] = store_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+        store_summary['Value Conv (%)'] = store_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+
+        store_display = store_summary[['Store', 'WarrantyPrice', 'WarrantyCount', 'Count Conv (%)', 'Value Conv (%)', 'AHSP']].copy()  # CORRECTED: Use WarrantyCount
+        store_display.columns = ['Store', 'Warranty Sales (₹)', 'Warranty Units', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)']
+
+        total_sales = store_summary['TotalSoldPrice'].sum()
+        total_warranty_sales = store_summary['WarrantyPrice'].sum()
+        total_units = store_summary['TotalCount'].sum()
+        total_warranty_units = store_summary['WarrantyCount'].sum()  # CORRECTED: Use WarrantyCount
         
-        fig_store.update_layout(
-            plot_bgcolor='rgba(255,255,255,1)',
-            paper_bgcolor='rgba(255,255,255,1)',
-            font=dict(family="Inter, sans-serif", size=12, color="#1e293b"),
-            xaxis=dict(showgrid=False, tickangle=45, title_font=dict(size=14, color="#1e293b")),
-            yaxis=dict(showgrid=True, gridcolor='#e2e8f0', title_font=dict(size=14, color="#1e293b")),
-            title_font=dict(size=18, color="#1e293b", family="Inter"),
-            height=550,
-            margin=dict(t=80, b=80, l=60, r=60)
-        )
-        st.plotly_chart(fig_store, use_container_width=True)
+        total_count_conv = (total_warranty_units / total_units * 100) if total_units > 0 else 0  # CORRECTED: WarrantyCount/TotalCount
+        total_value_conv = (total_warranty_sales / total_sales * 100) if total_sales > 0 else 0
+        total_ahsp = (total_warranty_sales / total_warranty_units) if total_warranty_units > 0 else 0  # CORRECTED: Use WarrantyCount
 
-    # Staff Performance Table
-    st.markdown(f'<h3 class="subheader">👨‍💼 Staff Performance Analysis - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
+        total_row = pd.DataFrame({
+            'Store': ['Total'],
+            'Warranty Sales (₹)': [total_warranty_sales],
+            'Warranty Units': [total_warranty_units],  # CORRECTED: Use WarrantyCount
+            'Count Conv (%)': [round(total_count_conv, 2)],
+            'Value Conv (%)': [round(total_value_conv, 2)],
+            'AHSP (₹)': [round(total_ahsp, 2)]
+        })
 
-    staff_summary = filtered_df.groupby(['Staff Name', 'Store']).agg({
-        'TotalSoldPrice': 'sum',
-        'WarrantyPrice': 'sum',
-        'TotalCount': 'sum',
-        'WarrantyCount': 'sum'
-    }).reset_index()
+        non_total_stores = store_display[store_display['Store'] != 'Total']
 
-    staff_summary['Count Conv (%)'] = (staff_summary['WarrantyCount'] / staff_summary['TotalCount'] * 100).round(2)
-    staff_summary['Value Conv (%)'] = (staff_summary['WarrantyPrice'] / staff_summary['TotalSoldPrice'] * 100).round(2)
-    staff_summary['AHSP'] = (staff_summary['WarrantyPrice'] / staff_summary['WarrantyCount']).where(staff_summary['WarrantyCount'] > 0, 0).round(2)
+        if value_conv_range != (min_conv, max_conv):
+            non_total_stores = non_total_stores[
+                (non_total_stores['Value Conv (%)'] >= value_conv_range[0]) & 
+                (non_total_stores['Value Conv (%)'] <= value_conv_range[1])
+            ]
 
-    staff_summary['Count Conv (%)'] = staff_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
-    staff_summary['Value Conv (%)'] = staff_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+        sort_ascending = True if sort_order == "Ascending" else False
 
-    staff_display = staff_summary[['Staff Name', 'Store', 'Value Conv (%)', 'Count Conv (%)', 'WarrantyPrice', 'WarrantyCount', 'AHSP']].copy()
-    staff_display.columns = ['Staff Name', 'Store', 'Value Conv (%)', 'Count Conv (%)', 'Warranty Sales (₹)', 'Warranty Units', 'AHSP (₹)']
-    
-    # Apply sorting to staff performance table
-    staff_sort_column_mapping = {
-        "Count Conv (%)": "Count Conv (%)",
-        "Value Conv (%)": "Value Conv (%)", 
-        "AHSP (₹)": "AHSP (₹)",
-        "Warranty Sales (₹)": "Warranty Sales (₹)",
-        "Warranty Units": "Warranty Units"
-    }
-    staff_sort_column = staff_sort_column_mapping.get(sort_by, "Count Conv (%)")
-    staff_display = staff_display.sort_values(staff_sort_column, ascending=sort_ascending)
-
-    st.dataframe(staff_display.style.format({
-        'Value Conv (%)': '{:.2f}%',
-        'Count Conv (%)': '{:.2f}%',
-        'Warranty Sales (₹)': '₹{:.0f}',
-        'Warranty Units': '{:.0f}',
-        'AHSP (₹)': '₹{:.2f}'
-    }), use_container_width=True)
-
-    st.download_button(
-        label="📥 Download Staff Performance as Excel",
-        data=to_excel(staff_display, 'Staff Performance'),
-        file_name=f"staff_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # RBM Performance
-    st.markdown(f'<h3 class="subheader">👥 RBM Performance Analysis - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
-
-    rbm_summary = filtered_df.groupby('RBM').agg({
-        'TotalSoldPrice': 'sum',
-        'WarrantyPrice': 'sum',
-        'TotalCount': 'sum',
-        'WarrantyCount': 'sum'
-    }).reset_index()
-
-    rbm_summary['Count Conv (%)'] = (rbm_summary['WarrantyCount'] / rbm_summary['TotalCount'] * 100).round(2)
-    rbm_summary['Value Conv (%)'] = (rbm_summary['WarrantyPrice'] / rbm_summary['TotalSoldPrice'] * 100).round(2)
-    rbm_summary['AHSP'] = (rbm_summary['WarrantyPrice'] / rbm_summary['WarrantyCount']).where(rbm_summary['WarrantyCount'] > 0, 0).round(2)
-
-    rbm_summary['Count Conv (%)'] = rbm_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
-    rbm_summary['Value Conv (%)'] = rbm_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
-
-    rbm_display = rbm_summary[['RBM', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
-    rbm_display.columns = ['RBM', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
-    
-    # Apply sorting to RBM performance table
-    rbm_sort_column_mapping = {
-        "Count Conv (%)": "Count Conv (%)",
-        "Value Conv (%)": "Value Conv (%)", 
-        "AHSP (₹)": "AHSP (₹)",
-        "Warranty Sales (₹)": "Warranty Sales (₹)",
-        "Warranty Units": "Warranty Units"
-    }
-    rbm_sort_column = rbm_sort_column_mapping.get(sort_by, "Count Conv (%)")
-    rbm_display = rbm_display.sort_values(rbm_sort_column, ascending=sort_ascending)
-
-    st.dataframe(rbm_display.style.format({
-        'Count Conv (%)': '{:.2f}%',
-        'Value Conv (%)': '{:.2f}%',
-        'AHSP (₹)': '₹{:.2f}',
-        'Warranty Sales (₹)': '₹{:.0f}',
-        'Warranty Units': '{:.0f}'
-    }), use_container_width=True)
-
-    st.download_button(
-        label="📥 Download RBM Performance as Excel",
-        data=to_excel(rbm_display, 'RBM Performance'),
-        file_name=f"rbm_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # Product Category Performance with Small Appliance Grouping
-    st.markdown(f'<h3 class="subheader">📦 Product Category Performance - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
-
-    # Define major appliances that should stay as separate rows
-    major_appliances = ['AC', 'TV', 'WASHING MACHINE', 'REFRIGERATOR', 'MICROWAVE OVEN', 'DISH WASHER', 'DRYER']
-
-    # Create a new column for the grouped category
-    filtered_df['Grouped Category'] = filtered_df['Item Category'].apply(
-        lambda x: 'SMALL APPLIANCE' if x not in major_appliances else x
-    )
-
-    category_summary = filtered_df.groupby('Grouped Category').agg({
-        'TotalSoldPrice': 'sum',
-        'WarrantyPrice': 'sum',
-        'TotalCount': 'sum',
-        'WarrantyCount': 'sum'
-    }).reset_index()
-
-    category_summary['Count Conv (%)'] = (category_summary['WarrantyCount'] / category_summary['TotalCount'] * 100).round(2)
-    category_summary['Value Conv (%)'] = (category_summary['WarrantyPrice'] / category_summary['TotalSoldPrice'] * 100).round(2)
-    category_summary['AHSP'] = (category_summary['WarrantyPrice'] / category_summary['WarrantyCount']).where(category_summary['WarrantyCount'] > 0, 0).round(2)
-
-    category_summary['Count Conv (%)'] = category_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
-    category_summary['Value Conv (%)'] = category_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
-
-    if not category_summary.empty:
-        category_display = category_summary[['Grouped Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
-        category_display.columns = ['Product Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
-        
-        # Apply sorting to category performance table
-        category_sort_column_mapping = {
+        sort_column_mapping = {
             "Count Conv (%)": "Count Conv (%)",
             "Value Conv (%)": "Value Conv (%)", 
             "AHSP (₹)": "AHSP (₹)",
             "Warranty Sales (₹)": "Warranty Sales (₹)",
             "Warranty Units": "Warranty Units"
         }
-        category_sort_column = category_sort_column_mapping.get(sort_by, "Count Conv (%)")
-        category_display = category_display.sort_values(category_sort_column, ascending=sort_ascending)
 
-        st.dataframe(category_display.style.format({
+        sort_column = sort_column_mapping.get(sort_by, "Count Conv (%)")
+        non_total_stores = non_total_stores.sort_values(sort_column, ascending=sort_ascending)
+
+        final_store_display = pd.concat([non_total_stores, total_row], ignore_index=True)
+
+        def highlight_low_value_conversion(row):
+            if row['Value Conv (%)'] < 2.0 and row['Store'] != 'Total':
+                return ['background-color: #fee2e2'] * len(row)
+            return [''] * len(row)
+
+        styled_final_display = final_store_display.style.format({
+            'Warranty Sales (₹)': '₹{:,.0f}',
+            'Warranty Units': '{:,.0f}',
+            'Count Conv (%)': '{:.2f}%',
+            'Value Conv (%)': '{:.2f}%',
+            'AHSP (₹)': '₹{:.2f}'
+        }).apply(highlight_low_value_conversion, axis=1)
+
+        st.dataframe(styled_final_display, use_container_width=True)
+
+        # Generate filename based on selected sheets
+        if "All" in st.session_state.selected_sheets:
+            file_suffix = "all_months_combined"
+        elif len(st.session_state.selected_sheets) == 1:
+            file_suffix = st.session_state.selected_sheets[0].lower().replace(' ', '_')
+        else:
+            file_suffix = f"{len(st.session_state.selected_sheets)}_months_combined"
+
+        st.download_button(
+            label="📥 Download Store Performance as Excel",
+            data=to_excel(final_store_display, 'Store Performance'),
+            file_name=f"store_performance_{file_suffix}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # Staff Performance Table
+        if "All" in st.session_state.selected_sheets:
+            st.markdown(f'<h3 class="subheader">👨‍💼 Staff Performance Analysis - All Months Combined</h3>', unsafe_allow_html=True)
+        elif len(st.session_state.selected_sheets) == 1:
+            st.markdown(f'<h3 class="subheader">👨‍💼 Staff Performance Analysis - {current_month}</h3>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<h3 class="subheader">👨‍💼 Staff Performance Analysis - Combined View</h3>', unsafe_allow_html=True)
+
+        staff_summary = display_df.groupby(['Staff Name', 'Store']).agg({
+            'TotalSoldPrice': 'sum',
+            'WarrantyPrice': 'sum',
+            'TotalCount': 'sum',
+            'WarrantyCount': 'sum'  # CORRECTED: Include WarrantyCount
+        }).reset_index()
+
+        # CORRECTED: Use WarrantyCount for count conversion and warranty units
+        staff_summary['Count Conv (%)'] = (staff_summary['WarrantyCount'] / staff_summary['TotalCount'] * 100).round(2)
+        staff_summary['Value Conv (%)'] = (staff_summary['WarrantyPrice'] / staff_summary['TotalSoldPrice'] * 100).round(2)
+        staff_summary['AHSP'] = (staff_summary['WarrantyPrice'] / staff_summary['WarrantyCount']).where(staff_summary['WarrantyCount'] > 0, 0).round(2)
+
+        staff_summary['Count Conv (%)'] = staff_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+        staff_summary['Value Conv (%)'] = staff_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+
+        staff_display = staff_summary[['Staff Name', 'Store', 'Value Conv (%)', 'Count Conv (%)', 'WarrantyPrice', 'WarrantyCount', 'AHSP']].copy()  # CORRECTED: Use WarrantyCount
+        staff_display.columns = ['Staff Name', 'Store', 'Value Conv (%)', 'Count Conv (%)', 'Warranty Sales (₹)', 'Warranty Units', 'AHSP (₹)']
+        
+        # Apply sorting to staff performance table
+        staff_sort_column_mapping = {
+            "Count Conv (%)": "Count Conv (%)",
+            "Value Conv (%)": "Value Conv (%)", 
+            "AHSP (₹)": "AHSP (₹)",
+            "Warranty Sales (₹)": "Warranty Sales (₹)",
+            "Warranty Units": "Warranty Units"
+        }
+        staff_sort_column = staff_sort_column_mapping.get(sort_by, "Count Conv (%)")
+        staff_display = staff_display.sort_values(staff_sort_column, ascending=sort_ascending)
+
+        st.dataframe(staff_display.style.format({
+            'Value Conv (%)': '{:.2f}%',
+            'Count Conv (%)': '{:.2f}%',
+            'Warranty Sales (₹)': '₹{:.0f}',
+            'Warranty Units': '{:.0f}',
+            'AHSP (₹)': '₹{:.2f}'
+        }), use_container_width=True)
+
+        st.download_button(
+            label="📥 Download Staff Performance as Excel",
+            data=to_excel(staff_display, 'Staff Performance'),
+            file_name=f"staff_performance_{file_suffix}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # RBM Performance
+        if "All" in st.session_state.selected_sheets:
+            st.markdown(f'<h3 class="subheader">👥 RBM Performance Analysis - All Months Combined</h3>', unsafe_allow_html=True)
+        elif len(st.session_state.selected_sheets) == 1:
+            st.markdown(f'<h3 class="subheader">👥 RBM Performance Analysis - {current_month}</h3>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<h3 class="subheader">👥 RBM Performance Analysis - Combined View</h3>', unsafe_allow_html=True)
+
+        rbm_summary = display_df.groupby('RBM').agg({
+            'TotalSoldPrice': 'sum',
+            'WarrantyPrice': 'sum',
+            'TotalCount': 'sum',
+            'WarrantyCount': 'sum'  # CORRECTED: Include WarrantyCount
+        }).reset_index()
+
+        # CORRECTED: Use WarrantyCount for count conversion and warranty units
+        rbm_summary['Count Conv (%)'] = (rbm_summary['WarrantyCount'] / rbm_summary['TotalCount'] * 100).round(2)
+        rbm_summary['Value Conv (%)'] = (rbm_summary['WarrantyPrice'] / rbm_summary['TotalSoldPrice'] * 100).round(2)
+        rbm_summary['AHSP'] = (rbm_summary['WarrantyPrice'] / rbm_summary['WarrantyCount']).where(rbm_summary['WarrantyCount'] > 0, 0).round(2)
+
+        rbm_summary['Count Conv (%)'] = rbm_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+        rbm_summary['Value Conv (%)'] = rbm_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+
+        rbm_display = rbm_summary[['RBM', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]  # CORRECTED: Use WarrantyCount
+        rbm_display.columns = ['RBM', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+        
+        # Apply sorting to RBM performance table
+        rbm_sort_column_mapping = {
+            "Count Conv (%)": "Count Conv (%)",
+            "Value Conv (%)": "Value Conv (%)", 
+            "AHSP (₹)": "AHSP (₹)",
+            "Warranty Sales (₹)": "Warranty Sales (₹)",
+            "Warranty Units": "Warranty Units"
+        }
+        rbm_sort_column = rbm_sort_column_mapping.get(sort_by, "Count Conv (%)")
+        rbm_display = rbm_display.sort_values(rbm_sort_column, ascending=sort_ascending)
+
+        st.dataframe(rbm_display.style.format({
             'Count Conv (%)': '{:.2f}%',
             'Value Conv (%)': '{:.2f}%',
             'AHSP (₹)': '₹{:.2f}',
@@ -1002,115 +1775,179 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         }), use_container_width=True)
 
         st.download_button(
-            label="📥 Download Product Category Performance as Excel",
-            data=to_excel(category_display, 'Product Category Performance'),
-            file_name=f"product_category_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
+            label="📥 Download RBM Performance as Excel",
+            data=to_excel(rbm_display, 'RBM Performance'),
+            file_name=f"rbm_performance_{file_suffix}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # Chart for the grouped categories
-        category_summary_for_chart = category_summary.copy()
-        category_summary_for_chart = category_summary_for_chart.sort_values(category_sort_column, ascending=sort_ascending)
-        
-        fig_category = px.bar(category_summary_for_chart, 
-                              x='Grouped Category', 
-                              y='Count Conv (%)', 
-                              title=f'📊 Product Category Count Conversion - {st.session_state.selected_sheet}',
-                              template='plotly_white',
-                              color='Count Conv (%)',
-                              color_continuous_scale='Plasma',
-                              text='Count Conv (%)')
-        
-        fig_category.update_traces(texttemplate='%{text:.2f}%', textposition='outside')
-        fig_category.update_layout(
-            plot_bgcolor='rgba(255,255,255,1)',
-            paper_bgcolor='rgba(255,255,255,1)',
-            font=dict(family="Inter, sans-serif", size=12, color="#1e293b"),
-            xaxis=dict(showgrid=False, tickangle=45, title_font=dict(size=14, color="#1e293b")),
-            yaxis=dict(showgrid=True, gridcolor='#e2e8f0', title_font=dict(size=14, color="#1e293b")),
-            title_font=dict(size=18, color="#1e293b", family="Inter"),
-            height=550,
-            margin=dict(t=80, b=80, l=60, r=60)
+        # Product Category Performance with Small Appliance Grouping
+        if "All" in st.session_state.selected_sheets:
+            st.markdown(f'<h3 class="subheader">📦 Product Category Performance - All Months Combined</h3>', unsafe_allow_html=True)
+        elif len(st.session_state.selected_sheets) == 1:
+            st.markdown(f'<h3 class="subheader">📦 Product Category Performance - {current_month}</h3>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<h3 class="subheader">📦 Product Category Performance - Combined View</h3>', unsafe_allow_html=True)
+
+        # Define major appliances that should stay as separate rows
+        major_appliances = ['AC', 'TV', 'WASHING MACHINE', 'REFRIGERATOR', 'MICROWAVE OVEN', 'DISH WASHER', 'DRYER']
+
+        # Create a new column for the grouped category
+        display_df['Grouped Category'] = display_df['Item Category'].apply(
+            lambda x: 'SMALL APPLIANCE' if x not in major_appliances else x
         )
-        st.plotly_chart(fig_category, use_container_width=True)
-    else:
-        st.warning("⚠️ No category data available with current filters.")
 
-    # Item Category Performance (Full Product Breakdown)
-    st.markdown(f'<h3 class="subheader">📋 Item Category Performance - Full Product Breakdown - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
+        category_summary = display_df.groupby('Grouped Category').agg({
+            'TotalSoldPrice': 'sum',
+            'WarrantyPrice': 'sum',
+            'TotalCount': 'sum',
+            'WarrantyCount': 'sum'  # CORRECTED: Include WarrantyCount
+        }).reset_index()
 
-    # Full item category performance without grouping
-    item_category_summary = filtered_df.groupby('Item Category').agg({
-        'TotalSoldPrice': 'sum',
-        'WarrantyPrice': 'sum',
-        'TotalCount': 'sum',
-        'WarrantyCount': 'sum'
-    }).reset_index()
+        # CORRECTED: Use WarrantyCount for count conversion and warranty units
+        category_summary['Count Conv (%)'] = (category_summary['WarrantyCount'] / category_summary['TotalCount'] * 100).round(2)
+        category_summary['Value Conv (%)'] = (category_summary['WarrantyPrice'] / category_summary['TotalSoldPrice'] * 100).round(2)
+        category_summary['AHSP'] = (category_summary['WarrantyPrice'] / category_summary['WarrantyCount']).where(category_summary['WarrantyCount'] > 0, 0).round(2)
 
-    item_category_summary['Count Conv (%)'] = (item_category_summary['WarrantyCount'] / item_category_summary['TotalCount'] * 100).round(2)
-    item_category_summary['Value Conv (%)'] = (item_category_summary['WarrantyPrice'] / item_category_summary['TotalSoldPrice'] * 100).round(2)
-    item_category_summary['AHSP'] = (item_category_summary['WarrantyPrice'] / item_category_summary['WarrantyCount']).where(item_category_summary['WarrantyCount'] > 0, 0).round(2)
+        category_summary['Count Conv (%)'] = category_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+        category_summary['Value Conv (%)'] = category_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
 
-    item_category_summary['Count Conv (%)'] = item_category_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
-    item_category_summary['Value Conv (%)'] = item_category_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+        if not category_summary.empty:
+            category_display = category_summary[['Grouped Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]  # CORRECTED: Use WarrantyCount
+            category_display.columns = ['Product Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+            
+            # Apply sorting to category performance table
+            category_sort_column_mapping = {
+                "Count Conv (%)": "Count Conv (%)",
+                "Value Conv (%)": "Value Conv (%)", 
+                "AHSP (₹)": "AHSP (₹)",
+                "Warranty Sales (₹)": "Warranty Sales (₹)",
+                "Warranty Units": "Warranty Units"
+            }
+            category_sort_column = category_sort_column_mapping.get(sort_by, "Count Conv (%)")
+            category_display = category_display.sort_values(category_sort_column, ascending=sort_ascending)
 
-    if not item_category_summary.empty:
-        item_category_display = item_category_summary[['Item Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]
-        item_category_display.columns = ['Item Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+            st.dataframe(category_display.style.format({
+                'Count Conv (%)': '{:.2f}%',
+                'Value Conv (%)': '{:.2f}%',
+                'AHSP (₹)': '₹{:.2f}',
+                'Warranty Sales (₹)': '₹{:.0f}',
+                'Warranty Units': '{:.0f}'
+            }), use_container_width=True)
+
+            st.download_button(
+                label="📥 Download Product Category Performance as Excel",
+                data=to_excel(category_display, 'Product Category Performance'),
+                file_name=f"product_category_performance_{file_suffix}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.warning("⚠️ No category data available with current filters.")
+
+        # Item Category Performance (Full Product Breakdown)
+        if "All" in st.session_state.selected_sheets:
+            st.markdown(f'<h3 class="subheader">📋 Item Category Performance - Full Product Breakdown - All Months Combined</h3>', unsafe_allow_html=True)
+        elif len(st.session_state.selected_sheets) == 1:
+            st.markdown(f'<h3 class="subheader">📋 Item Category Performance - Full Product Breakdown - {current_month}</h3>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<h3 class="subheader">📋 Item Category Performance - Full Product Breakdown - Combined View</h3>', unsafe_allow_html=True)
+
+        # Full item category performance without grouping
+        item_category_summary = display_df.groupby('Item Category').agg({
+            'TotalSoldPrice': 'sum',
+            'WarrantyPrice': 'sum',
+            'TotalCount': 'sum',
+            'WarrantyCount': 'sum'  # CORRECTED: Include WarrantyCount
+        }).reset_index()
+
+        # CORRECTED: Use WarrantyCount for count conversion and warranty units
+        item_category_summary['Count Conv (%)'] = (item_category_summary['WarrantyCount'] / item_category_summary['TotalCount'] * 100).round(2)
+        item_category_summary['Value Conv (%)'] = (item_category_summary['WarrantyPrice'] / item_category_summary['TotalSoldPrice'] * 100).round(2)
+        item_category_summary['AHSP'] = (item_category_summary['WarrantyPrice'] / item_category_summary['WarrantyCount']).where(item_category_summary['WarrantyCount'] > 0, 0).round(2)
+
+        item_category_summary['Count Conv (%)'] = item_category_summary['Count Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+        item_category_summary['Value Conv (%)'] = item_category_summary['Value Conv (%)'].replace([float('inf'), -float('inf')], 0).fillna(0)
+
+        if not item_category_summary.empty:
+            item_category_display = item_category_summary[['Item Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP', 'WarrantyPrice', 'WarrantyCount']]  # CORRECTED: Use WarrantyCount
+            item_category_display.columns = ['Item Category', 'Count Conv (%)', 'Value Conv (%)', 'AHSP (₹)', 'Warranty Sales (₹)', 'Warranty Units']
+            
+            # Apply sorting to item category performance table
+            item_category_sort_column_mapping = {
+                "Count Conv (%)": "Count Conv (%)",
+                "Value Conv (%)": "Value Conv (%)", 
+                "AHSP (₹)": "AHSP (₹)",
+                "Warranty Sales (₹)": "Warranty Sales (₹)",
+                "Warranty Units": "Warranty Units"
+            }
+            item_category_sort_column = item_category_sort_column_mapping.get(sort_by, "Count Conv (%)")
+            item_category_display = item_category_display.sort_values(item_category_sort_column, ascending=sort_ascending)
+
+            st.dataframe(item_category_display.style.format({
+                'Count Conv (%)': '{:.2f}%',
+                'Value Conv (%)': '{:.2f}%',
+                'AHSP (₹)': '₹{:.2f}',
+                'Warranty Sales (₹)': '₹{:.0f}',
+                'Warranty Units': '{:.0f}'
+            }), use_container_width=True)
+
+            st.download_button(
+                label="📥 Download Item Category Performance as Excel",
+                data=to_excel(item_category_display, 'Item Category Performance'),
+                file_name=f"item_category_performance_{file_suffix}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.info("ℹ️ No item category data available with current filters.")
+
+        # Insights Section
+        if "All" in st.session_state.selected_sheets:
+            st.markdown(f'<h3 class="subheader">💡 Performance Insights & Key Takeaways - All Months Combined</h3>', unsafe_allow_html=True)
+        elif len(st.session_state.selected_sheets) == 1:
+            st.markdown(f'<h3 class="subheader">💡 Performance Insights & Key Takeaways - {current_month}</h3>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<h3 class="subheader">💡 Performance Insights & Key Takeaways - Combined View</h3>', unsafe_allow_html=True)
         
-        # Apply sorting to item category performance table
-        item_category_sort_column_mapping = {
-            "Count Conv (%)": "Count Conv (%)",
-            "Value Conv (%)": "Value Conv (%)", 
-            "AHSP (₹)": "AHSP (₹)",
-            "Warranty Sales (₹)": "Warranty Sales (₹)",
-            "Warranty Units": "Warranty Units"
-        }
-        item_category_sort_column = item_category_sort_column_mapping.get(sort_by, "Count Conv (%)")
-        item_category_display = item_category_display.sort_values(item_category_sort_column, ascending=sort_ascending)
+        if not store_summary.empty:
+            top_store = store_summary.loc[store_summary['Count Conv (%)'].idxmax()]
+            bottom_store = store_summary.loc[store_summary['Count Conv (%)'].idxmin()]
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.success(f"🏆 **Top Performing Store**: {top_store['Store']} with **{top_store['Count Conv (%)']:.2f}%** count conversion")
+            
+            with col2:
+                st.warning(f"📉 **Store Needing Improvement**: {bottom_store['Store']} with **{bottom_store['Count Conv (%)']:.2f}%** count conversion")
+        
+        if not rbm_summary.empty:
+            top_rbm = rbm_summary.loc[rbm_summary['Count Conv (%)'].idxmax()]
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.info(f"👑 **Top Performing RBM**: {top_rbm['RBM']} with **{top_rbm['Count Conv (%)']:.2f}%** count conversion")
+            
+            with col2:
+                st.info(f"💰 **Overall AHSP**: **₹{ahsp:,.2f}**")
 
-        st.dataframe(item_category_display.style.format({
-            'Count Conv (%)': '{:.2f}%',
-            'Value Conv (%)': '{:.2f}%',
-            'AHSP (₹)': '₹{:.2f}',
-            'Warranty Sales (₹)': '₹{:.0f}',
-            'Warranty Units': '{:.0f}'
-        }), use_container_width=True)
-
-        st.download_button(
-            label="📥 Download Item Category Performance as Excel",
-            data=to_excel(item_category_display, 'Item Category Performance'),
-            file_name=f"item_category_performance_{st.session_state.selected_sheet.lower().replace(' ', '_')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.info("ℹ️ No item category data available with current filters.")
-
-    # Insights Section
-    st.markdown(f'<h3 class="subheader">💡 Performance Insights & Key Takeaways - {st.session_state.selected_sheet}</h3>', unsafe_allow_html=True)
+    # MONTHLY TREND CHART SECTION - Show for all scenarios
+    st.markdown(f'<h3 class="subheader">📈 Monthly Warranty Sales Trend</h3>', unsafe_allow_html=True)
     
-    if not store_summary.empty:
-        top_store = store_summary.loc[store_summary['Count Conv (%)'].idxmax()]
-        bottom_store = store_summary.loc[store_summary['Count Conv (%)'].idxmin()]
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.success(f"🏆 **Top Performing Store**: {top_store['Store']} with **{top_store['Count Conv (%)']:.2f}%** count conversion")
-        
-        with col2:
-            st.warning(f"📉 **Store Needing Improvement**: {bottom_store['Store']} with **{bottom_store['Count Conv (%)']:.2f}%** count conversion")
-    
-    if not rbm_summary.empty:
-        top_rbm = rbm_summary.loc[rbm_summary['Count Conv (%)'].idxmax()]
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info(f"👑 **Top Performing RBM**: {top_rbm['RBM']} with **{top_rbm['Count Conv (%)']:.2f}%** count conversion")
-        
-        with col2:
-            st.info(f"💰 **Overall AHSP**: **₹{ahsp:,.2f}**")
+    # Create and display the monthly trend chart
+    trend_chart = create_monthly_trend_chart(st.session_state.individual_month_data)
+    if trend_chart:
+        st.plotly_chart(trend_chart, use_container_width=True)
+    else:
+        st.info("No trend data available to display.")
 
 else:
-    st.error(f"❌ Failed to load data from Google Sheets for {st.session_state.selected_sheet}. Please check the Apps Script URL, Spreadsheet ID, or network connection.")
+    if not st.session_state.data_loaded and st.session_state.selected_sheets:
+        show_loading_animation(
+            "Initializing Dashboard", 
+            "Setting up your warranty conversion analysis dashboard..."
+        )
+    elif not st.session_state.selected_sheets:
+        st.warning("⚠️ Please select at least one month from the sidebar to view data.")
+    else:
+        st.error("❌ Failed to load data from Google Sheets. Please check the Apps Script URL, Spreadsheet ID, or network connection.")
