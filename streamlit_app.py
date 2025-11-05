@@ -884,7 +884,7 @@ if 'data_loaded' not in st.session_state:
 if 'current_df' not in st.session_state:
     st.session_state.current_df = None
 if 'selected_sheets' not in st.session_state:
-    st.session_state.selected_sheets = [SHEETS[-1]]  # Default to first sheet
+    st.session_state.selected_sheets = [SHEETS[9]]  # Default to first sheet
 if 'individual_month_data' not in st.session_state:
     st.session_state.individual_month_data = {}
 if 'comparison_filters' not in st.session_state:
