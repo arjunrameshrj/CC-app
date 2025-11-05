@@ -31,6 +31,7 @@ SHEETS = [
     "2025 JULY",
     "2025 AUG",
     "2025 SEP"
+    "2025 OCT"
 ]
 
 # Function to fetch data from Google Sheets for a specific sheet
@@ -883,7 +884,7 @@ if 'data_loaded' not in st.session_state:
 if 'current_df' not in st.session_state:
     st.session_state.current_df = None
 if 'selected_sheets' not in st.session_state:
-    st.session_state.selected_sheets = [SHEETS[9]]  # Default to first sheet
+    st.session_state.selected_sheets = [SHEETS[10]]  # Default to first sheet
 if 'individual_month_data' not in st.session_state:
     st.session_state.individual_month_data = {}
 if 'comparison_filters' not in st.session_state:
