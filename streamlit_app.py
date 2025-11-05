@@ -12,7 +12,7 @@ import time
 st.set_page_config(page_title="Warranty Conversion Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 # --- Google Sheets Integration Configuration ---
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxAWSobp3gjljTxx-Y--wPSTFp5BKOoea8gZ79mSxGr52nwq9XUpZQxzqMhcwnM97bj/exec"  # Replace with your Apps Script web app URL
+APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCOzbER3Q3q71j6T7jHffR_f99ODIsV1w_PNLBXaqoj-AN7XQu7Cc0d4PJ4X4q7oaJ/exec"  # Replace with your Apps Script web app URL
 
 # Configure requests with retry logic
 session = requests.Session()
