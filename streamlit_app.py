@@ -23,7 +23,7 @@ session.mount('https', HTTPAdapter(max_retries=retries))
 SHEETS = [
     "2024 December",
     "2025 JAN",
-    "2025 FEB",
+    "2025 FEB", 
     "2025 MARCH",
     "2025 April",
     "2025 MAY",
@@ -55,7 +55,6 @@ def fetch_data_from_sheets(sheet_name):
 st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
         * {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
@@ -664,6 +663,96 @@ def show_loading_animation(message="Loading Data", submessage="Please wait while
         </div>
     """, unsafe_allow_html=True)
 
+# Function to format numbers in lakhs, crores, and thousands
+def format_indian_currency(value):
+    """Format numbers in Indian currency format (Cr, L, T)"""
+    if pd.isna(value) or value == 0:
+        return "0"
+    
+    value = float(value)
+    
+    # For crores (>= 1,00,00,000)
+    if abs(value) >= 10000000:
+        return f"{value/10000000:.1f}Cr"
+    # For lakhs (>= 1,00,000)
+    elif abs(value) >= 100000:
+        return f"{value/100000:.1f}L"
+    # For thousands (>= 1,000)
+    elif abs(value) >= 1000:
+        return f"{value/1000:.0f}T"
+    else:
+        return f"{value:.0f}"
+
+# Function to create product-wise monthly summary table with filters applied
+def create_product_monthly_summary(individual_data, filters, category_column, replacement_filter, speaker_filter):
+    """Create a product-wise monthly summary table with formatted values and filters applied"""
+    
+    # Define the main product categories we want to track
+    main_categories = ['AC', 'TV', 'REFRIGERATOR', 'WASHING MACHINE', 'MICROWAVE OVEN']
+    
+    # Initialize the summary dictionary
+    summary_data = []
+    
+    # Get all available months
+    available_months = list(individual_data.keys())
+    
+    for category in main_categories:
+        category_data = {'Product': category}
+        
+        for month in available_months:
+            month_df = individual_data[month]
+            
+            # Apply filters to the month data
+            filtered_month_data = apply_comparison_filters(
+                month_df, 
+                filters, 
+                category_column,
+                replacement_filter,
+                speaker_filter
+            )
+            
+            # Filter data for this category
+            category_sales = filtered_month_data[filtered_month_data['Item Category'] == category]
+            
+            # Calculate warranty sales for this category
+            warranty_sales = category_sales['WarrantyPrice'].sum()
+            
+            # Format the value
+            category_data[month] = format_indian_currency(warranty_sales)
+        
+        summary_data.append(category_data)
+    
+    # Add "OTHERS" category
+    others_data = {'Product': 'OTHERS'}
+    
+    for month in available_months:
+        month_df = individual_data[month]
+        
+        # Apply filters to the month data
+        filtered_month_data = apply_comparison_filters(
+            month_df, 
+            filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        
+        # Filter data for non-main categories
+        other_categories_sales = filtered_month_data[~filtered_month_data['Item Category'].isin(main_categories)]
+        
+        # Calculate warranty sales for other categories
+        others_warranty_sales = other_categories_sales['WarrantyPrice'].sum()
+        
+        # Format the value
+        others_data[month] = format_indian_currency(others_warranty_sales)
+    
+    summary_data.append(others_data)
+    
+    # Convert to DataFrame
+    summary_df = pd.DataFrame(summary_data)
+    
+    return summary_df
+
 # Function to calculate comparison metrics for all tables
 def calculate_comparison(month1_data, month2_data, month1_name, month2_name):
     """Calculate comparison metrics between two months for all tables"""
@@ -1077,7 +1166,6 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         st.session_state.comparison_filters['replacement_filter'] = replacement_filter
         st.session_state.comparison_filters['speaker_filter'] = speaker_filter
         st.session_state.comparison_filters['future_filter'] = future_filter
-
         # Value Conversion range filter
         st.markdown('<hr>', unsafe_allow_html=True)
         st.markdown('<h4 style="color: #1e293b; font-weight: 600;">📊 Value Conversion Filter</h4>', unsafe_allow_html=True)
@@ -1127,12 +1215,10 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         rbm_options = ['All'] + sorted(df['RBM'].unique().tolist())
         store_options = ['All'] + sorted(df['Store'].unique().tolist())
         category_options = ['All'] + sorted(df[category_column].unique().tolist())
-
         selected_bdm = st.selectbox("👔 BDM", bdm_options, index=bdm_options.index(st.session_state.comparison_filters['selected_bdm']) if st.session_state.comparison_filters['selected_bdm'] in bdm_options else 0)
         selected_rbm = st.selectbox("👤 RBM", rbm_options, index=rbm_options.index(st.session_state.comparison_filters['selected_rbm']) if st.session_state.comparison_filters['selected_rbm'] in rbm_options else 0)
         selected_store = st.selectbox("🏪 Store", store_options, index=store_options.index(st.session_state.comparison_filters['selected_store']) if st.session_state.comparison_filters['selected_store'] in store_options else 0)
         selected_category = st.selectbox(f"📦 {category_column}", category_options, index=category_options.index(st.session_state.comparison_filters['selected_category']) if st.session_state.comparison_filters['selected_category'] in category_options else 0)
-
         if selected_rbm != 'All':
             staff_options = ['All'] + sorted(df[df['RBM'] == selected_rbm]['Staff Name'].unique().tolist())
         else:
@@ -1561,7 +1647,6 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         # KPI metrics
         st.markdown('<h3 style="color: #1e293b; font-weight: 600; margin: 25px 0 15px 0;">🎯 Key Performance Indicators</h3>', unsafe_allow_html=True)
         col1, col2, col3, col4, col5 = st.columns(5)
-
         total_warranty = display_df['WarrantyPrice'].sum()
         total_units = display_df['TotalCount'].sum()
         total_warranty_units = display_df['WarrantyCount'].sum()  # CORRECTED: Use WarrantyCount for warranty units
@@ -1626,7 +1711,6 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         })
 
         non_total_stores = store_display[store_display['Store'] != 'Total']
-
         if value_conv_range != (min_conv, max_conv):
             non_total_stores = non_total_stores[
                 (non_total_stores['Value Conv (%)'] >= value_conv_range[0]) & 
@@ -1634,7 +1718,6 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
             ]
 
         sort_ascending = True if sort_order == "Ascending" else False
-
         sort_column_mapping = {
             "Count Conv (%)": "Count Conv (%)",
             "Value Conv (%)": "Value Conv (%)", 
@@ -1642,7 +1725,6 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
             "Warranty Sales (₹)": "Warranty Sales (₹)",
             "Warranty Units": "Warranty Units"
         }
-
         sort_column = sort_column_mapping.get(sort_by, "Count Conv (%)")
         non_total_stores = non_total_stores.sort_values(sort_column, ascending=sort_ascending)
 
@@ -1900,9 +1982,34 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
             )
         else:
             st.info("ℹ️ No item category data available with current filters.")
-
     
-    # MONTHLY TREND CHART SECTION - Show for all scenarios
+    # MOVED: PRODUCT-WISE MONTHLY SUMMARY TABLE - Now at the bottom before the trend chart
+    st.markdown(f'<h3 class="subheader">📊 Product-wise Monthly Warranty Sales Summary</h3>', unsafe_allow_html=True)
+    
+    # Create the product-wise monthly summary table with filters applied
+    product_summary_table = create_product_monthly_summary(
+        individual_data, 
+        st.session_state.comparison_filters, 
+        category_column,
+        replacement_filter,
+        speaker_filter
+    )
+    
+    if not product_summary_table.empty:
+        # Display the table
+        st.dataframe(product_summary_table, use_container_width=True)
+        
+        # Download button for the product summary
+        st.download_button(
+            label="📥 Download Product Monthly Summary as Excel",
+            data=to_excel(product_summary_table, 'Product Monthly Summary'),
+            file_name="product_monthly_summary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("No product summary data available with current filters.")
+
+    # MONTHLY TREND CHART SECTION - Show for all scenarios (now at the very bottom)
     st.markdown(f'<h3 class="subheader">📈 Monthly Warranty Sales Trend</h3>', unsafe_allow_html=True)
     
     # Create and display the monthly trend chart
