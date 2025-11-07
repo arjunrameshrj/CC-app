@@ -548,6 +548,10 @@ st.markdown("""
 
 # Function to convert DataFrame to Excel for download
 def to_excel(df, sheet_name='Data'):
+    # Shorten sheet name if it's too long for Excel
+    if len(sheet_name) > 31:
+        sheet_name = sheet_name[:31]
+    
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_export = df.copy()
@@ -747,6 +751,105 @@ def create_product_monthly_summary(individual_data, filters, category_column, re
         others_data[month] = format_indian_currency(others_warranty_sales)
     
     summary_data.append(others_data)
+    
+    # Convert to DataFrame
+    summary_df = pd.DataFrame(summary_data)
+    
+    return summary_df
+
+# NEW FUNCTION: Create product-wise monthly value conversion summary table
+def create_product_monthly_value_conversion_summary(individual_data, filters, category_column, replacement_filter, speaker_filter):
+    """Create a product-wise monthly value conversion summary table with filters applied"""
+    
+    # Define the main product categories we want to track
+    main_categories = ['AC', 'TV', 'REFRIGERATOR', 'WASHING MACHINE', 'MICROWAVE OVEN']
+    
+    # Initialize the summary dictionary
+    summary_data = []
+    
+    # Get all available months
+    available_months = list(individual_data.keys())
+    
+    for category in main_categories:
+        category_data = {'Product': category}
+        
+        for month in available_months:
+            month_df = individual_data[month]
+            
+            # Apply filters to the month data
+            filtered_month_data = apply_comparison_filters(
+                month_df, 
+                filters, 
+                category_column,
+                replacement_filter,
+                speaker_filter
+            )
+            
+            # Filter data for this category
+            category_data_filtered = filtered_month_data[filtered_month_data['Item Category'] == category]
+            
+            # Calculate value conversion for this category
+            total_sales = category_data_filtered['TotalSoldPrice'].sum()
+            warranty_sales = category_data_filtered['WarrantyPrice'].sum()
+            value_conversion = (warranty_sales / total_sales * 100) if total_sales > 0 else 0
+            
+            # Format the value as percentage
+            category_data[month] = f"{value_conversion:.2f}%"
+        
+        summary_data.append(category_data)
+    
+    # Add "OTHERS" category
+    others_data = {'Product': 'OTHERS'}
+    
+    for month in available_months:
+        month_df = individual_data[month]
+        
+        # Apply filters to the month data
+        filtered_month_data = apply_comparison_filters(
+            month_df, 
+            filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        
+        # Filter data for non-main categories
+        other_categories_data = filtered_month_data[~filtered_month_data['Item Category'].isin(main_categories)]
+        
+        # Calculate value conversion for other categories
+        total_sales_others = other_categories_data['TotalSoldPrice'].sum()
+        warranty_sales_others = other_categories_data['WarrantyPrice'].sum()
+        value_conversion_others = (warranty_sales_others / total_sales_others * 100) if total_sales_others > 0 else 0
+        
+        # Format the value as percentage
+        others_data[month] = f"{value_conversion_others:.2f}%"
+    
+    summary_data.append(others_data)
+    
+    # Add "TOTAL" row
+    total_data = {'Product': 'TOTAL'}
+    
+    for month in available_months:
+        month_df = individual_data[month]
+        
+        # Apply filters to the month data
+        filtered_month_data = apply_comparison_filters(
+            month_df, 
+            filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        
+        # Calculate overall value conversion for the month
+        total_sales_month = filtered_month_data['TotalSoldPrice'].sum()
+        warranty_sales_month = filtered_month_data['WarrantyPrice'].sum()
+        value_conversion_month = (warranty_sales_month / total_sales_month * 100) if total_sales_month > 0 else 0
+        
+        # Format the value as percentage
+        total_data[month] = f"{value_conversion_month:.2f}%"
+    
+    summary_data.append(total_data)
     
     # Convert to DataFrame
     summary_df = pd.DataFrame(summary_data)
@@ -2008,6 +2111,32 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         )
     else:
         st.info("No product summary data available with current filters.")
+
+    # NEW: PRODUCT-WISE MONTHLY VALUE CONVERSION SUMMARY TABLE
+    st.markdown(f'<h3 class="subheader">📊 Product-wise Monthly Value Conversion Summary</h3>', unsafe_allow_html=True)
+    
+    # Create the product-wise monthly value conversion summary table with filters applied
+    product_value_conversion_table = create_product_monthly_value_conversion_summary(
+        individual_data, 
+        st.session_state.comparison_filters, 
+        category_column,
+        replacement_filter,
+        speaker_filter
+    )
+    
+    if not product_value_conversion_table.empty:
+        # Display the table
+        st.dataframe(product_value_conversion_table, use_container_width=True)
+        
+        # Download button for the product value conversion summary
+        st.download_button(
+            label="📥 Download Product Value Conversion Summary as Excel",
+            data=to_excel(product_value_conversion_table, 'Product Value Conv Summary'),
+            file_name="product_value_conversion_summary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("No product value conversion summary data available with current filters.")
 
     # MONTHLY TREND CHART SECTION - Show for all scenarios (now at the very bottom)
     st.markdown(f'<h3 class="subheader">📈 Monthly Warranty Sales Trend</h3>', unsafe_allow_html=True)
