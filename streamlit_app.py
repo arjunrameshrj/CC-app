@@ -31,7 +31,8 @@ SHEETS = [
     "2025 JULY",
     "2025 AUG",
     "2025 SEP",
-    "2025 OCT"
+    "2025 OCT",
+    "2025 NOV"
 ]
 
 # Function to fetch data from Google Sheets for a specific sheet
