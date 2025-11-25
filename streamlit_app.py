@@ -753,6 +753,29 @@ def create_product_monthly_summary(individual_data, filters, category_column, re
     
     summary_data.append(others_data)
     
+    # Add "TOTAL" row
+    total_data = {'Product': 'TOTAL'}
+    
+    for month in available_months:
+        month_df = individual_data[month]
+        
+        # Apply filters to the month data
+        filtered_month_data = apply_comparison_filters(
+            month_df, 
+            filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        
+        # Calculate total warranty sales for the month
+        total_warranty_sales = filtered_month_data['WarrantyPrice'].sum()
+        
+        # Format the value
+        total_data[month] = format_indian_currency(total_warranty_sales)
+    
+    summary_data.append(total_data)
+    
     # Convert to DataFrame
     summary_df = pd.DataFrame(summary_data)
     
@@ -1070,6 +1093,30 @@ def create_monthly_trend_chart(individual_data):
         
         return fig
     return None
+
+# Function to add total row to any dataframe with numeric columns
+def add_total_row(df, group_by_columns, numeric_columns):
+    """Add a total row to a dataframe"""
+    if df.empty:
+        return df
+    
+    # Calculate totals for numeric columns
+    total_values = {}
+    for col in df.columns:
+        if col in numeric_columns:
+            total_values[col] = df[col].sum()
+        elif col in group_by_columns:
+            total_values[col] = 'Total'
+        else:
+            total_values[col] = ''
+    
+    # Create total row
+    total_row = pd.DataFrame([total_values])
+    
+    # Concatenate with original dataframe
+    result_df = pd.concat([df, total_row], ignore_index=True)
+    
+    return result_df
 
 # Session state initialization
 if 'data_loaded' not in st.session_state:
@@ -1900,8 +1947,21 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         }
         staff_sort_column = staff_sort_column_mapping.get(sort_by, "Count Conv (%)")
         staff_display = staff_display.sort_values(staff_sort_column, ascending=sort_ascending)
+        
+        # Add total row to staff performance table
+        total_staff_row = pd.DataFrame({
+            'Staff Name': ['Total'],
+            'Store': [''],
+            'Value Conv (%)': [round((staff_summary['WarrantyPrice'].sum() / staff_summary['TotalSoldPrice'].sum() * 100) if staff_summary['TotalSoldPrice'].sum() > 0 else 0, 2)],
+            'Count Conv (%)': [round((staff_summary['WarrantyCount'].sum() / staff_summary['TotalCount'].sum() * 100) if staff_summary['TotalCount'].sum() > 0 else 0, 2)],
+            'Warranty Sales (₹)': [staff_summary['WarrantyPrice'].sum()],
+            'Warranty Units': [staff_summary['WarrantyCount'].sum()],
+            'AHSP (₹)': [round((staff_summary['WarrantyPrice'].sum() / staff_summary['WarrantyCount'].sum()) if staff_summary['WarrantyCount'].sum() > 0 else 0, 2)]
+        })
+        
+        staff_display_with_total = pd.concat([staff_display, total_staff_row], ignore_index=True)
 
-        st.dataframe(staff_display.style.format({
+        st.dataframe(staff_display_with_total.style.format({
             'Value Conv (%)': '{:.2f}%',
             'Count Conv (%)': '{:.2f}%',
             'Warranty Sales (₹)': '₹{:.0f}',
@@ -1911,7 +1971,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
 
         st.download_button(
             label="📥 Download Staff Performance as Excel",
-            data=to_excel(staff_display, 'Staff Performance'),
+            data=to_excel(staff_display_with_total, 'Staff Performance'),
             file_name=f"staff_performance_{file_suffix}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
@@ -1952,8 +2012,20 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         }
         rbm_sort_column = rbm_sort_column_mapping.get(sort_by, "Count Conv (%)")
         rbm_display = rbm_display.sort_values(rbm_sort_column, ascending=sort_ascending)
+        
+        # Add total row to RBM performance table
+        total_rbm_row = pd.DataFrame({
+            'RBM': ['Total'],
+            'Count Conv (%)': [round((rbm_summary['WarrantyCount'].sum() / rbm_summary['TotalCount'].sum() * 100) if rbm_summary['TotalCount'].sum() > 0 else 0, 2)],
+            'Value Conv (%)': [round((rbm_summary['WarrantyPrice'].sum() / rbm_summary['TotalSoldPrice'].sum() * 100) if rbm_summary['TotalSoldPrice'].sum() > 0 else 0, 2)],
+            'AHSP (₹)': [round((rbm_summary['WarrantyPrice'].sum() / rbm_summary['WarrantyCount'].sum()) if rbm_summary['WarrantyCount'].sum() > 0 else 0, 2)],
+            'Warranty Sales (₹)': [rbm_summary['WarrantyPrice'].sum()],
+            'Warranty Units': [rbm_summary['WarrantyCount'].sum()]
+        })
+        
+        rbm_display_with_total = pd.concat([rbm_display, total_rbm_row], ignore_index=True)
 
-        st.dataframe(rbm_display.style.format({
+        st.dataframe(rbm_display_with_total.style.format({
             'Count Conv (%)': '{:.2f}%',
             'Value Conv (%)': '{:.2f}%',
             'AHSP (₹)': '₹{:.2f}',
@@ -1963,7 +2035,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
 
         st.download_button(
             label="📥 Download RBM Performance as Excel",
-            data=to_excel(rbm_display, 'RBM Performance'),
+            data=to_excel(rbm_display_with_total, 'RBM Performance'),
             file_name=f"rbm_performance_{file_suffix}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
@@ -2013,8 +2085,20 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
             }
             category_sort_column = category_sort_column_mapping.get(sort_by, "Count Conv (%)")
             category_display = category_display.sort_values(category_sort_column, ascending=sort_ascending)
+            
+            # Add total row to category performance table
+            total_category_row = pd.DataFrame({
+                'Product Category': ['Total'],
+                'Count Conv (%)': [round((category_summary['WarrantyCount'].sum() / category_summary['TotalCount'].sum() * 100) if category_summary['TotalCount'].sum() > 0 else 0, 2)],
+                'Value Conv (%)': [round((category_summary['WarrantyPrice'].sum() / category_summary['TotalSoldPrice'].sum() * 100) if category_summary['TotalSoldPrice'].sum() > 0 else 0, 2)],
+                'AHSP (₹)': [round((category_summary['WarrantyPrice'].sum() / category_summary['WarrantyCount'].sum()) if category_summary['WarrantyCount'].sum() > 0 else 0, 2)],
+                'Warranty Sales (₹)': [category_summary['WarrantyPrice'].sum()],
+                'Warranty Units': [category_summary['WarrantyCount'].sum()]
+            })
+            
+            category_display_with_total = pd.concat([category_display, total_category_row], ignore_index=True)
 
-            st.dataframe(category_display.style.format({
+            st.dataframe(category_display_with_total.style.format({
                 'Count Conv (%)': '{:.2f}%',
                 'Value Conv (%)': '{:.2f}%',
                 'AHSP (₹)': '₹{:.2f}',
@@ -2024,7 +2108,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
 
             st.download_button(
                 label="📥 Download Product Category Performance as Excel",
-                data=to_excel(category_display, 'Product Category Performance'),
+                data=to_excel(category_display_with_total, 'Product Category Performance'),
                 file_name=f"product_category_performance_{file_suffix}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
@@ -2069,8 +2153,20 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
             }
             item_category_sort_column = item_category_sort_column_mapping.get(sort_by, "Count Conv (%)")
             item_category_display = item_category_display.sort_values(item_category_sort_column, ascending=sort_ascending)
+            
+            # Add total row to item category performance table
+            total_item_category_row = pd.DataFrame({
+                'Item Category': ['Total'],
+                'Count Conv (%)': [round((item_category_summary['WarrantyCount'].sum() / item_category_summary['TotalCount'].sum() * 100) if item_category_summary['TotalCount'].sum() > 0 else 0, 2)],
+                'Value Conv (%)': [round((item_category_summary['WarrantyPrice'].sum() / item_category_summary['TotalSoldPrice'].sum() * 100) if item_category_summary['TotalSoldPrice'].sum() > 0 else 0, 2)],
+                'AHSP (₹)': [round((item_category_summary['WarrantyPrice'].sum() / item_category_summary['WarrantyCount'].sum()) if item_category_summary['WarrantyCount'].sum() > 0 else 0, 2)],
+                'Warranty Sales (₹)': [item_category_summary['WarrantyPrice'].sum()],
+                'Warranty Units': [item_category_summary['WarrantyCount'].sum()]
+            })
+            
+            item_category_display_with_total = pd.concat([item_category_display, total_item_category_row], ignore_index=True)
 
-            st.dataframe(item_category_display.style.format({
+            st.dataframe(item_category_display_with_total.style.format({
                 'Count Conv (%)': '{:.2f}%',
                 'Value Conv (%)': '{:.2f}%',
                 'AHSP (₹)': '₹{:.2f}',
@@ -2080,7 +2176,7 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
 
             st.download_button(
                 label="📥 Download Item Category Performance as Excel",
-                data=to_excel(item_category_display, 'Item Category Performance'),
+                data=to_excel(item_category_display_with_total, 'Item Category Performance'),
                 file_name=f"item_category_performance_{file_suffix}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
