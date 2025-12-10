@@ -781,6 +781,166 @@ def create_product_monthly_summary(individual_data, filters, category_column, re
     
     return summary_df
 
+# Function to create RBM-wise monthly summary table with filters applied
+def create_rbm_monthly_summary(individual_data, filters, category_column, replacement_filter, speaker_filter):
+    """Create an RBM-wise monthly summary table with formatted values and filters applied"""
+    
+    # Initialize the summary dictionary
+    summary_data = []
+    
+    # Get all available months
+    available_months = list(individual_data.keys())
+    
+    # Get all unique RBMs across all months
+    all_rbms = set()
+    for month_data in individual_data.values():
+        filtered_month_data = apply_comparison_filters(
+            month_data, 
+            filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        all_rbms.update(filtered_month_data['RBM'].unique())
+    
+    all_rbms = sorted(list(all_rbms))
+    
+    for rbm in all_rbms:
+        rbm_data = {'RBM': rbm}
+        
+        for month in available_months:
+            month_df = individual_data[month]
+            
+            # Apply filters to the month data
+            filtered_month_data = apply_comparison_filters(
+                month_df, 
+                filters, 
+                category_column,
+                replacement_filter,
+                speaker_filter
+            )
+            
+            # Filter data for this RBM
+            rbm_sales = filtered_month_data[filtered_month_data['RBM'] == rbm]
+            
+            # Calculate warranty sales for this RBM
+            warranty_sales = rbm_sales['WarrantyPrice'].sum()
+            
+            # Format the value
+            rbm_data[month] = format_indian_currency(warranty_sales)
+        
+        summary_data.append(rbm_data)
+    
+    # Add "TOTAL" row
+    total_data = {'RBM': 'TOTAL'}
+    
+    for month in available_months:
+        month_df = individual_data[month]
+        
+        # Apply filters to the month data
+        filtered_month_data = apply_comparison_filters(
+            month_df, 
+            filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        
+        # Calculate total warranty sales for the month
+        total_warranty_sales = filtered_month_data['WarrantyPrice'].sum()
+        
+        # Format the value
+        total_data[month] = format_indian_currency(total_warranty_sales)
+    
+    summary_data.append(total_data)
+    
+    # Convert to DataFrame
+    summary_df = pd.DataFrame(summary_data)
+    
+    return summary_df
+
+# Function to create RBM-wise monthly value conversion summary table with filters applied
+def create_rbm_monthly_value_conversion_summary(individual_data, filters, category_column, replacement_filter, speaker_filter):
+    """Create an RBM-wise monthly value conversion summary table with filters applied"""
+    
+    # Initialize the summary dictionary
+    summary_data = []
+    
+    # Get all available months
+    available_months = list(individual_data.keys())
+    
+    # Get all unique RBMs across all months
+    all_rbms = set()
+    for month_data in individual_data.values():
+        filtered_month_data = apply_comparison_filters(
+            month_data, 
+            filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        all_rbms.update(filtered_month_data['RBM'].unique())
+    
+    all_rbms = sorted(list(all_rbms))
+    
+    for rbm in all_rbms:
+        rbm_data = {'RBM': rbm}
+        
+        for month in available_months:
+            month_df = individual_data[month]
+            
+            # Apply filters to the month data
+            filtered_month_data = apply_comparison_filters(
+                month_df, 
+                filters, 
+                category_column,
+                replacement_filter,
+                speaker_filter
+            )
+            
+            # Filter data for this RBM
+            rbm_filtered_data = filtered_month_data[filtered_month_data['RBM'] == rbm]
+            
+            # Calculate value conversion for this RBM
+            total_sales = rbm_filtered_data['TotalSoldPrice'].sum()
+            warranty_sales = rbm_filtered_data['WarrantyPrice'].sum()
+            value_conversion = (warranty_sales / total_sales * 100) if total_sales > 0 else 0
+            
+            # Format the value as percentage
+            rbm_data[month] = f"{value_conversion:.2f}%"
+        
+        summary_data.append(rbm_data)
+    
+    # Add "TOTAL" row
+    total_data = {'RBM': 'TOTAL'}
+    
+    for month in available_months:
+        month_df = individual_data[month]
+        
+        # Apply filters to the month data
+        filtered_month_data = apply_comparison_filters(
+            month_df, 
+            filters, 
+            category_column,
+            replacement_filter,
+            speaker_filter
+        )
+        
+        # Calculate overall value conversion for the month
+        total_sales_month = filtered_month_data['TotalSoldPrice'].sum()
+        warranty_sales_month = filtered_month_data['WarrantyPrice'].sum()
+        value_conversion_month = (warranty_sales_month / total_sales_month * 100) if total_sales_month > 0 else 0
+        
+        # Format the value as percentage
+        total_data[month] = f"{value_conversion_month:.2f}%"
+    
+    summary_data.append(total_data)
+    
+    # Convert to DataFrame
+    summary_df = pd.DataFrame(summary_data)
+    
+    return summary_df
+
 # NEW FUNCTION: Create product-wise monthly value conversion summary table
 def create_product_monthly_value_conversion_summary(individual_data, filters, category_column, replacement_filter, speaker_filter):
     """Create a product-wise monthly value conversion summary table with filters applied"""
@@ -2183,6 +2343,58 @@ if st.session_state.data_loaded and st.session_state.current_df is not None:
         else:
             st.info("ℹ️ No item category data available with current filters.")
     
+    # NEW: RBM-WISE MONTHLY SUMMARY TABLE
+    st.markdown(f'<h3 class="subheader">👥 RBM-wise Monthly Warranty Sales Summary</h3>', unsafe_allow_html=True)
+    
+    # Create the RBM-wise monthly summary table with filters applied
+    rbm_summary_table = create_rbm_monthly_summary(
+        individual_data, 
+        st.session_state.comparison_filters, 
+        category_column,
+        replacement_filter,
+        speaker_filter
+    )
+    
+    if not rbm_summary_table.empty:
+        # Display the table
+        st.dataframe(rbm_summary_table, use_container_width=True)
+        
+        # Download button for the RBM summary
+        st.download_button(
+            label="📥 Download RBM Monthly Summary as Excel",
+            data=to_excel(rbm_summary_table, 'RBM Monthly Summary'),
+            file_name="rbm_monthly_summary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("No RBM summary data available with current filters.")
+
+    # NEW: RBM-WISE MONTHLY VALUE CONVERSION SUMMARY TABLE
+    st.markdown(f'<h3 class="subheader">👥 RBM-wise Monthly Value Conversion Summary</h3>', unsafe_allow_html=True)
+    
+    # Create the RBM-wise monthly value conversion summary table with filters applied
+    rbm_value_conversion_table = create_rbm_monthly_value_conversion_summary(
+        individual_data, 
+        st.session_state.comparison_filters, 
+        category_column,
+        replacement_filter,
+        speaker_filter
+    )
+    
+    if not rbm_value_conversion_table.empty:
+        # Display the table
+        st.dataframe(rbm_value_conversion_table, use_container_width=True)
+        
+        # Download button for the RBM value conversion summary
+        st.download_button(
+            label="📥 Download RBM Value Conversion Summary as Excel",
+            data=to_excel(rbm_value_conversion_table, 'RBM Value Conv Summary'),
+            file_name="rbm_value_conversion_summary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.info("No RBM value conversion summary data available with current filters.")
+
     # MOVED: PRODUCT-WISE MONTHLY SUMMARY TABLE - Now at the bottom before the trend chart
     st.markdown(f'<h3 class="subheader">📊 Product-wise Monthly Warranty Sales Summary</h3>', unsafe_allow_html=True)
     
